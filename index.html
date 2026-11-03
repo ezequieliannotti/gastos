@@ -617,14 +617,16 @@ async function driveMeta() {
   return (l.files || [])[0] || null;
 }
 async function driveSubir() {
-  const meta = { appProperties: { actualizado: state.actualizado || '' } };
+  const subido = state.actualizado || '';
+  const meta = { appProperties: { actualizado: subido } };
   if (!drive.fileId) Object.assign(meta, { name: DRIVE_NOMBRE, mimeType: 'application/json' });
   const b = 'gastos' + uid();
   const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n` +
     `--${b}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(state)}\r\n--${b}--`;
   const url = drive.fileId ? `${DUP}/${drive.fileId}?uploadType=multipart&fields=id` : `${DUP}?uploadType=multipart&fields=id`;
   const r = await (await driveApi(url, { method: drive.fileId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body })).json();
-  drive.fileId = r.id; drive.remoto = state.actualizado || ''; drive.ultimo = new Date(); driveGuardarCfg();
+  drive.fileId = r.id; drive.remoto = subido; drive.ultimo = new Date(); driveGuardarCfg();
+  if ((state.actualizado || '') !== subido) programarDrive();   // typed during the upload: send that too
 }
 // Compare this device with Drive: whichever side changed wins; if both changed since the last sync, ask.
 let driveOcupado = false, drivePendiente = false;
@@ -638,13 +640,14 @@ async function sincronizarDrive() {
     const local = state.actualizado || '';
     const cambioRemoto = !!m && remoto !== drive.remoto;
     const cambioLocal = local !== drive.remoto;
-    if (m) drive.fileId = m.id;
+    drive.fileId = m ? m.id : null;   // no file in Drive (or it was deleted): create a new one
     let traer = false;
     if (m && (!Object.keys(state.meses).length || (cambioRemoto && !cambioLocal))) traer = true;
     else if (m && cambioRemoto && cambioLocal) traer = !confirm(`Hay cambios guardados en Google Drive desde otro dispositivo${remoto ? ' (' + new Date(remoto).toLocaleString('es-AR') + ')' : ''} y también cambios en este.\n\nAceptar: quedarte con los de ESTE dispositivo (se pisan los de Drive).\nCancelar: traer los de Drive (se pierden los de acá).`);
     if (traer) {
       const data = await (await driveApi(`${DAPI}/files/${m.id}?alt=media`)).json();
       if (!data || !data.meses || !data.personas) throw new Error('el archivo de Drive no tiene datos válidos');
+      if ((state.actualizado || '') !== local) { drivePendiente = true; throw new Error('cambios'); }
       state = data;
       try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
       drive.remoto = state.actualizado || ''; drive.ultimo = new Date(); driveGuardarCfg();
@@ -653,7 +656,7 @@ async function sincronizarDrive() {
     } else if (!m || cambioLocal) await driveSubir();
     else { drive.ultimo = new Date(); driveGuardarCfg(); }
   } catch (e) {
-    if (e.message !== 'auth') { console.warn(e); toast('⚠ No pude sincronizar con Drive: ' + e.message, 7000); }
+    if (e.message !== 'auth' && e.message !== 'cambios') { console.warn(e); toast('⚠ No pude sincronizar con Drive: ' + e.message, 7000); }
   }
   driveOcupado = false; renderDrive();
   if (drivePendiente) { drivePendiente = false; sincronizarDrive(); }
@@ -1777,6 +1780,8 @@ document.addEventListener('keydown', e => {
     const pref = fk.split('|').slice(0, 2).join('|') + '|';
     const celdas = [...document.querySelectorAll(`input[data-focus^="${pref}"]`)];
     const sig = celdas[celdas.indexOf(el) + 1];
+    const [, k, id] = fk.split('|');
+    setPresu(k, id, el.value);   // commit now (formats and adds up), without waiting for the browser's change event
     if (sig) sig.focus(); else el.blur();
     return;
   }
