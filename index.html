@@ -1,0 +1,2194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gastos de Tarjetas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #f0f2f5; --border: #e2e5ea;
+  --text: #1c2230; --muted: #6b7385; --accent: #2457d6; --accent-soft: #e8eefc;
+  --me: #0f8a5f; --me-soft: #e3f5ee; --warn: #b26b00; --warn-soft: #fff4e0;
+  --danger: #c23b3b; --changed: #fff7d6; --shadow: 0 1px 2px rgba(20,30,50,.06), 0 4px 16px rgba(20,30,50,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --surface: #1a1e26; --surface-2: #222733; --border: #2e3442;
+    --text: #e6e9ef; --muted: #959cad; --accent: #6f9bff; --accent-soft: #1f2a44;
+    --me: #3ccf95; --me-soft: #15332a; --warn: #f0b456; --warn-soft: #3a2c14;
+    --danger: #ff7b7b; --changed: #3a3418; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+header.top { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.sticky { position: sticky; top: 0; z-index: 10; }
+a { color: var(--accent); }
+header.top h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+header.top .sp { flex: 1; }
+button, .btn { font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  padding: 7px 14px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+button:hover, .btn:hover { background: var(--surface-2); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+button.small { padding: 3px 9px; font-size: 12.5px; }
+button.ghost { border-color: transparent; background: transparent; }
+button.danger { color: var(--danger); }
+nav.tabs { display: flex; gap: 4px; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+  overflow-x: auto; }
+nav.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 14px; background: none; white-space: nowrap; color: var(--muted); }
+nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+main { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
+.drop { border: 2px dashed var(--border); border-radius: 12px; padding: 22px; text-align: center; color: var(--muted);
+  background: var(--surface); margin-bottom: 20px; transition: .15s; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.drop b { color: var(--text); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 18px; margin-bottom: 18px; }
+.card h2 { font-size: 15px; margin: 0 0 12px; font-weight: 650; }
+.card h2 .sub { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
+.hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.stat .lbl { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; }
+.stat .val { font-size: 26px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.stat .hint { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.stat.me { background: var(--me-soft); border-color: transparent; }
+.stat.me .val { color: var(--me); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; background: var(--surface); position: sticky; top: 0; }
+td.n, th.n { text-align: right; }
+tr.me td { background: var(--me-soft); font-weight: 600; }
+tr.tot td { font-weight: 650; border-top: 2px solid var(--border); }
+tr.changed td { background: var(--changed); }
+tr.excl td { opacity: .45; text-decoration: line-through; }
+tr.excl td:nth-child(6) { text-decoration: none; opacity: 1; }
+td.clickable { cursor: pointer; }
+td.clickable:hover { text-decoration: underline; }
+td.desc { white-space: normal; min-width: 220px; }
+.neg { color: var(--me); }
+.muted { color: var(--muted); }
+.tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+.tag.visa { background: #e8eefc; color: #1d3fa0; } .tag.mastercard { background: #fdeee3; color: #a2470b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tag.visa { background: #1f2a44; color: #9db8ff; } :root:not([data-theme="light"]) .tag.mastercard { background: #3a2616; color: #ffb27d; } }
+td.pc, th.pc { padding-left: 4px; padding-right: 0; width: 1%; }
+.pencil { padding: 3px 6px; opacity: .6; }
+tr:hover .pencil, .pencil:focus { opacity: 1; }
+.nota { margin-top: 3px; font-size: 12.5px; color: var(--warn); cursor: pointer; white-space: pre-wrap; }
+.nota:hover { text-decoration: underline; }
+.split { display: flex; flex-direction: column; gap: 1px; margin-top: 4px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.split:hover { color: var(--accent); }
+.split .yo { color: var(--text); font-weight: 600; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.tag.mem { background: var(--accent-soft); color: var(--accent); }
+select, input[type=text], input[type=number], input[type=date] { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); }
+select.who { min-width: 110px; }
+select.cat { max-width: 190px; }
+select.sincat { color: var(--muted); border-style: dashed; }
+.people { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.person { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; cursor: pointer; box-shadow: var(--shadow); position: relative; }
+.person.on { outline: 2px solid var(--accent); }
+.person.me { background: var(--me-soft); border-color: transparent; }
+.person .nm { font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.person .amt { font-size: 20px; font-weight: 650; margin-top: 2px; }
+.person .portj { margin-top: 6px; display: grid; gap: 3px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.person .portj > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.person .row { display: flex; gap: 6px; margin-top: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.person label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.paid { color: var(--me); font-weight: 600; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar .sp { flex: 1; }
+.info { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.info .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+.ok { color: var(--me); } .bad { color: var(--warn); }
+.toast { position: fixed; bottom: 20px; right: 20px; max-width: 460px; background: var(--text); color: var(--bg); padding: 12px 16px;
+  border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.25); z-index: 100; white-space: pre-line; }
+.modal-bg { position: fixed; inset: 0; background: rgba(10,15,25,.45); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 50; overflow-y: auto; }
+.modal { background: var(--surface); border-radius: 14px; padding: 22px; width: 100%; max-width: 720px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal h3 { margin: 0 0 4px; font-size: 17px; }
+.modal h4 { margin: 20px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.modal .grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+.empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+.empty h2 { color: var(--text); font-size: 20px; }
+.bar { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.person.me .bar > i { background: var(--me); }
+/* chart series (fixed order, validated palette; color follows the person) */
+:root { --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#6250d6; --s8:#e34948; --s-other:#9a9a96; --grid:#e8e8e4; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; --s-other:#77776f; --grid:#2c313c; } }
+.warnbtn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); font-weight: 600; }
+.banner { background: var(--accent-soft); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.banner.warn { background: var(--warn-soft); }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; }
+.charts .card { margin-bottom: 0; }
+.chartbox { position: relative; height: 300px; }
+.chartbox.tall { height: 360px; }
+.charts + .card { margin-top: 18px; }
+table.presu input.celda { width: 82px; text-align: right; padding: 4px 6px; font-variant-numeric: tabular-nums; border-color: transparent; background: transparent; }
+table.presu input.celda:hover, table.presu input.celda:focus { border-color: var(--border); background: var(--surface); }
+table.presu input.celda.esauto::placeholder { color: var(--accent); opacity: 1; font-style: italic; }
+table.presu input.celda.override { color: var(--warn); font-weight: 600; }
+table.presu input.nom { border-color: transparent; background: transparent; width: 150px; font-weight: 500; }
+table.presu input.nom:hover, table.presu input.nom:focus { border-color: var(--border); background: var(--surface); }
+table.presu td, table.presu th { padding: 3px 4px; font-size: 13px; }
+table.presu input { font-size: 13px; }
+table.presu .concepto { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+table.presu .fila { display: flex; align-items: center; }
+table.presu .fila .ghost { opacity: .35; padding: 2px 5px; }
+table.presu tr:hover .fila .ghost { opacity: 1; }
+table.presu tr.sec td { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding-top: 16px; border-bottom: 2px solid var(--border); }
+table.presu tr.sub td { font-weight: 600; background: var(--surface-2); }
+table.presu tr.sub td:first-child, table.presu tr.queda td:first-child { position: sticky; left: 0; z-index: 1; }
+table.presu tr.queda td { font-weight: 700; font-size: 15px; border-top: 2px solid var(--text); background: var(--surface); }
+table.presu tr.addrow td { border-bottom: none; }
+table.presu .seclbl, table.presu tr.addrow button { position: sticky; left: 8px; }
+table.presu th .ghost { padding: 0 4px; font-size: 12px; }
+@media (max-width: 640px) { .charts { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { header.top { flex-wrap: wrap; } header.top h1 { width: 100%; } header.top .sp { display: none; } }
+@media (max-width: 640px) { header.top, main { padding-left: 16px; padding-right: 16px; } nav.tabs { padding: 0 8px; } .sticky { position: static; } }
+</style>
+</head>
+<body>
+<div class="sticky">
+<header class="top">
+  <h1>💳 Gastos de Tarjetas</h1>
+  <span class="sp"></span>
+  <input type="file" id="file" accept="application/pdf" multiple hidden>
+  <button class="primary" onclick="document.getElementById('file').click()">⬆ Subir resumen PDF</button>
+  <button id="driveBtn" onclick="clickDrive()" hidden>☁️ Google Drive</button>
+  <button id="archivoBtn" onclick="clickArchivo()">💾 Guardar en archivo</button>
+  <button onclick="exportarExcel()">⬇ Descargar Excel</button>
+  <button onclick="abrirConfig()">⚙ Configuración</button>
+</header>
+<nav class="tabs" id="tabs"></nav>
+</div>
+<main id="main"></main>
+
+<script>
+// ===== PARSER (shared between the web page and the node test) =====
+const MESES = {ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,set:9,oct:10,nov:11,dic:12};
+
+function parseNum(s) {
+  return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+}
+function parseFecha(s) {
+  const m = s.match(/^(\d{1,2})-([A-Za-zé]{3})-(\d{2})$/);
+  if (!m) return null;
+  const mes = MESES[m[2].toLowerCase()];
+  if (!mes) return null;
+  return { d: +m[1], m: mes, y: 2000 + +m[3] };
+}
+function fechaISO(f) {
+  return f.y + '-' + String(f.m).padStart(2, '0') + '-' + String(f.d).padStart(2, '0');
+}
+
+// Pages -> lines. items: [{str, x, y, w}] in pdf units (y grows upward).
+async function extractLines(pdf) {
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const items = tc.items
+      .filter(it => it.str && it.str.trim() !== '')
+      .map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width }));
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    let cur = null;
+    for (const it of items) {
+      if (cur && Math.abs(cur.y - it.y) <= 2.5) cur.items.push(it);
+      else { cur = { y: it.y, page: p, items: [it] }; lines.push(cur); }
+    }
+  }
+  for (const l of lines) {
+    l.items.sort((a, b) => a.x - b.x);
+    l.text = l.items.map(i => i.str.trim()).join(' ').replace(/\s+/g, ' ').trim();
+  }
+  return lines;
+}
+
+// The card brand comes from the account line ("Visa Signature cuenta ..."), not from any
+// mention in the legal text / promos, which can name the other brand.
+function detectarTarjeta(texts) {
+  const marca = s => /mastercard/i.test(s) ? 'Mastercard' : /\bvisa\b/i.test(s) ? 'Visa' : null;
+  const pruebas = [
+    t => /\bcuenta\s+\d+/i.test(t),                 // "Visa Signature cuenta 0267852581 CONSOLIDADO"
+    t => /^Resumen con\b/i.test(t),                  // "Resumen con Visa"
+    t => /^Tarjeta de cr[eé ]+dito (visa|mastercard)/i.test(t)
+  ];
+  for (const p of pruebas) {
+    for (const t of texts) if (p(t) && marca(t)) return marca(t);
+  }
+  // Fallback: whichever brand is mentioned more often.
+  const all = texts.join('\n');
+  const nv = (all.match(/\bvisa\b/gi) || []).length, nm = (all.match(/mastercard/gi) || []).length;
+  return nv || nm ? (nm > nv ? 'Mastercard' : 'Visa') : 'Tarjeta';
+}
+
+// Statement parser for BBVA Visa / Mastercard "Resumen" PDFs.
+function parseResumen(lines) {
+  const texts = lines.map(l => l.text);
+  const all = texts.join('\n');
+  const res = {
+    tarjeta: detectarTarjeta(texts),
+    cierre: null, vencimiento: null, saldoPesos: null, saldoUSD: null,
+    titulares: [],   // [{nombre, totalPesos, totalUSD}]
+    gastos: [],      // [{fecha, desc, cuota, cupon, titular, pesos, usd, seccion}]
+    warnings: []
+  };
+  // Header: "CIERRE ACTUAL VENCIMIENTO ACTUAL SALDO ACTUAL $ SALDO ACTUAL U$S ..." followed by the values.
+  const hi = texts.findIndex(t => /CIERRE ACTUAL/i.test(t));
+  if (hi >= 0) {
+    const blob = texts.slice(hi, hi + 14).join(' ');
+    const after = blob.slice(blob.search(/CIERRE ACTUAL/i));
+    const fechas = after.match(/\d{2}-[A-Za-z]{3}-\d{2}/g) || [];
+    if (fechas[0]) res.cierre = parseFecha(fechas[0]);
+    if (fechas[1]) res.vencimiento = parseFecha(fechas[1]);
+    const desdeFecha = fechas[1] ? after.slice(after.indexOf(fechas[1]) + fechas[1].length) : '';
+    const montos = desdeFecha.match(/-?[\d.]+,\d{2}/g) || [];
+    if (montos[0]) res.saldoPesos = parseNum(montos[0]);
+    if (montos[1]) res.saldoUSD = parseNum(montos[1]);
+  }
+
+  // Column x (right edge) for PESOS / DÓLARES, from the detail header.
+  let colPesos = null, colUSD = null;
+  let seccion = null;   // null | {tipo:'consumos', titular} | {tipo:'impuestos'} | {tipo:'pagos'}
+  const amountRe = /^-?[\d.]+,\d{2}$/;
+
+  for (const l of lines) {
+    const t = l.text;
+    if (/^FECHA DESCRIPCI/i.test(t)) {
+      for (const it of l.items) {
+        const s = it.str.trim().toUpperCase();
+        if (s === 'PESOS' || s.endsWith(' PESOS')) colPesos = it.x + it.w;
+        if (s.endsWith('LARES')) colUSD = it.x + it.w;   // "DÓLARES" may come split as D / Ó / LARES
+      }
+      continue;
+    }
+    let m;
+    if (/^Sus pagos y ajustes/i.test(t)) { seccion = { tipo: 'pagos' }; continue; }
+    if ((m = t.match(/^Consumos (.+)$/i)) && !/^Consumos de/i.test(t)) { seccion = { tipo: 'consumos', titular: m[1].trim().toUpperCase() }; continue; }
+    if (/^Impuestos, cargos e intereses/i.test(t)) { seccion = { tipo: 'impuestos' }; continue; }
+    if ((m = t.match(/^TOTAL CONSUMOS DE (.+?) (-?[\d.]+,\d{2}) (-?[\d.]+,\d{2})$/i))) {
+      if (seccion && seccion.tipo === 'consumos') {
+        res.titulares.push({ nombre: m[1].trim().toUpperCase(), totalPesos: parseNum(m[2]), totalUSD: parseNum(m[3]) });
+      }
+      seccion = null; continue;
+    }
+    if (/^SALDO ACTUAL/i.test(t) || /^Legales y avisos/i.test(t)) { seccion = null; continue; }
+    if (!seccion || seccion.tipo === 'pagos') continue;
+
+    const fm = t.match(/^(\d{2}-[A-Za-z]{3}-\d{2}) (.+)$/);
+    if (!fm) continue;
+    const fecha = parseFecha(fm[1]);
+    if (!fecha) continue;
+
+    // Last amount token = the charged amount; find which column it sits in.
+    const toks = fm[2].split(' ');
+    const last = toks[toks.length - 1];
+    if (!amountRe.test(last)) continue;
+    const monto = parseNum(last);
+    let esUSD = null;
+    const lastItem = [...l.items].reverse().find(i => i.str.trim().endsWith(last));
+    if (lastItem && colPesos != null && colUSD != null) {
+      const r = lastItem.x + lastItem.w;
+      esUSD = Math.abs(r - colUSD) < Math.abs(r - colPesos);
+    }
+    if (esUSD === null) esUSD = /\bUSD\b/.test(fm[2]);
+    toks.pop();
+    let body = toks.join(' ');
+    let cupon = '';
+    if (seccion.tipo === 'consumos') {
+      const cm = body.match(/ (\S+)$/);
+      if (cm) { cupon = cm[1]; body = body.slice(0, -cm[0].length); }
+    }
+    let cuota = '';
+    const qm = body.match(/\bC\.(\d{2})\/(\d{2})\b/);
+    if (qm) { cuota = qm[1] + '/' + qm[2]; body = body.replace(qm[0], ' '); }
+    body = body.replace(/\bUSD\s+[\d.]+,\d{2}/, m => m).replace(/\s+/g, ' ').trim();
+
+    res.gastos.push({
+      fecha: fechaISO(fecha), desc: body, cuota, cupon,
+      titular: seccion.tipo === 'consumos' ? seccion.titular : 'IMPUESTOS',
+      seccion: seccion.tipo,
+      pesos: esUSD ? 0 : monto, usd: esUSD ? monto : 0,
+      original: t
+    });
+  }
+
+  // Cross-check: sum of parsed lines vs. statement totals per titular block.
+  const sum = {};
+  for (const g of res.gastos) {
+    if (g.seccion !== 'consumos') continue;
+    const k = g.titular; sum[k] = sum[k] || { p: 0, u: 0 };
+    sum[k].p += g.pesos; sum[k].u += g.usd;
+  }
+  const tot = {};
+  for (const tt of res.titulares) {
+    tot[tt.nombre] = tot[tt.nombre] || { p: 0, u: 0 };
+    tot[tt.nombre].p += tt.totalPesos; tot[tt.nombre].u += tt.totalUSD;
+  }
+  for (const k of Object.keys(tot)) {
+    const s = sum[k] || { p: 0, u: 0 };
+    if (Math.abs(s.p - tot[k].p) > 0.05 || Math.abs(s.u - tot[k].u) > 0.05) {
+      res.warnings.push(`Los gastos leídos de ${k} (${s.p.toFixed(2)} / USD ${s.u.toFixed(2)}) no coinciden con el total del resumen (${tot[k].p.toFixed(2)} / USD ${tot[k].u.toFixed(2)}).`);
+    }
+  }
+  if (!res.vencimiento) res.warnings.push('No encontré la fecha de vencimiento.');
+  if (!res.gastos.length) res.warnings.push('No encontré gastos. ¿Es un resumen de BBVA?');
+  return res;
+}
+
+if (typeof module !== 'undefined') module.exports = { extractLines, parseResumen };
+
+</script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ===== STATE =====
+const STORE = 'gastosTarjetas.v1';
+const NOMBRES_MES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const NO_CONTAR = '_none';
+const DIVIDIDO = '_split';
+
+function defaultState() {
+  return {
+    principal: 'eze',
+    dolar: 1450,
+    personas: [
+      { id: 'eze', nombre: 'Eze' }, { id: 'euge', nombre: 'Euge' }, { id: 'gi', nombre: 'Gi' },
+      { id: 'ari', nombre: 'Ari' }, { id: 'dani', nombre: 'Dani' }, { id: 'nadia', nombre: 'Nadia' }
+    ],
+    // titular as it appears in the PDF (first + last word) -> persona id
+    claves: {},
+    meses: {},   // 'YYYY-MM' -> { dolar, resumenes: {Visa: meta, Mastercard: meta}, gastos: [], pagado: {} }
+    reglas: {},  // installment key -> persona id (remembered reassignments)
+    notas: {}    // installment key -> note (follows the purchase into next months)
+  };
+}
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && s.meses) return s; } catch (e) {}
+  return defaultState();
+}
+let state = load();
+let ui = { tab: 'resumen', filtroPersona: '', filtroTarjeta: '', buscar: '' };
+function save() {
+  state.actualizado = new Date().toISOString();
+  try { localStorage.setItem(STORE, JSON.stringify(state)); }
+  catch (e) { toast('⚠ No pude guardar en el navegador: ' + e.message); }
+  programarEscritura();
+  programarDrive();
+}
+
+// ===== ARCHIVO DE DATOS (copy of everything in a .json the user picks) =====
+const fsSoportado = 'showSaveFilePicker' in window && 'indexedDB' in window;
+const archivo = { handle: null, estado: 'none', ultimo: null };   // estado: none | permiso | ok
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('gastosTarjetas', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function idbOp(fn) {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readwrite'); const st = tx.objectStore('kv');
+    const r = fn(st); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error);
+  });
+}
+async function initArchivo() {
+  if (!fsSoportado) return;
+  try {
+    const h = await idbOp(st => st.get('handle'));
+    if (!h) return;
+    archivo.handle = h;
+    if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') await conectarArchivo();
+    else archivo.estado = 'permiso';
+  } catch (e) { console.warn(e); }
+  renderArchivo(); render();
+}
+// Read the file: the newest copy (file vs. browser) wins, then keep the file in sync.
+async function conectarArchivo() {
+  const txt = await (await archivo.handle.getFile()).text();
+  let data = null;
+  try { data = txt.trim() ? JSON.parse(txt) : null; } catch (e) {}
+  const localVacio = !Object.keys(state.meses).length;
+  if (data && data.meses && data.personas && (localVacio || (data.actualizado || '') > (state.actualizado || ''))) {
+    state = data;
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+    if (Object.keys(state.meses).length) toast('📂 Cargué tus datos desde ' + archivo.handle.name);
+  }
+  archivo.estado = 'ok';
+  await escribirArchivo();
+  render();
+}
+let escrituraTimer;
+function programarEscritura() {
+  if (archivo.estado !== 'ok') return;
+  clearTimeout(escrituraTimer);
+  escrituraTimer = setTimeout(escribirArchivo, 400);
+}
+async function escribirArchivo() {
+  if (!archivo.handle || archivo.estado !== 'ok') return;
+  try {
+    const w = await archivo.handle.createWritable();
+    await w.write(JSON.stringify(state, null, 1)); await w.close();
+    archivo.ultimo = new Date();
+  } catch (e) {
+    console.warn(e); archivo.estado = 'permiso';
+    toast('⚠ No pude guardar en el archivo. Tocá "Reconectar archivo" arriba.');
+  }
+  renderArchivo();
+}
+const tiposJSON = [{ description: 'Datos de gastos', accept: { 'application/json': ['.json'] } }];
+async function crearArchivo() {
+  try {
+    const h = await window.showSaveFilePicker({ suggestedName: 'gastos-tarjetas-datos.json', types: tiposJSON });
+    await usarHandle(h);
+  } catch (e) { if (e.name !== 'AbortError') toast('❌ ' + e.message); }
+}
+async function abrirArchivo() {
+  try {
+    const [h] = await window.showOpenFilePicker({ types: tiposJSON });
+    if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return;
+    await usarHandle(h);
+  } catch (e) { if (e.name !== 'AbortError') toast('❌ ' + e.message); }
+}
+async function usarHandle(h) {
+  archivo.handle = h;
+  await idbOp(st => st.put(h, 'handle'));
+  await conectarArchivo();
+  document.getElementById('arch')?.remove();
+  toast('💾 Listo. Desde ahora todo se guarda también en ' + h.name);
+}
+async function reconectarArchivo() {
+  try {
+    if (await archivo.handle.requestPermission({ mode: 'readwrite' }) === 'granted') await conectarArchivo();
+  } catch (e) { toast('❌ ' + e.message); }
+  renderArchivo();
+}
+async function desconectarArchivo() {
+  await idbOp(st => st.delete('handle'));
+  archivo.handle = null; archivo.estado = 'none';
+  document.getElementById('arch')?.remove(); renderArchivo(); render();
+}
+function renderArchivo() {
+  const b = document.getElementById('archivoBtn');
+  if (!b) return;
+  if (!fsSoportado) { b.hidden = true; return; }
+  b.className = archivo.estado === 'permiso' ? 'warnbtn' : '';
+  b.innerHTML = archivo.estado === 'ok'
+    ? `💾 ${esc(archivo.handle.name)} <span class="muted">${archivo.ultimo ? '· guardado ' + archivo.ultimo.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : ''}</span>`
+    : archivo.estado === 'permiso' ? '⚠ Reconectar archivo' : '💾 Guardar en archivo';
+}
+function clickArchivo() {
+  if (archivo.estado === 'permiso') return reconectarArchivo();
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'arch';
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  bg.innerHTML = archivo.estado === 'ok'
+    ? `<div class="modal"><h3>💾 Archivo de datos</h3>
+        <p>Todo se guarda automáticamente en <b>${esc(archivo.handle.name)}</b> cada vez que cambiás algo${archivo.ultimo ? ' (último guardado: ' + archivo.ultimo.toLocaleString('es-AR') + ')' : ''}.</p>
+        <p class="muted">Si cambiás de compu o de navegador, abrí esta página y elegí "Ya tengo un archivo" con este mismo archivo.</p>
+        <div class="toolbar"><button onclick="abrirArchivo()">Usar otro archivo</button><span class="sp"></span>
+        <button class="danger" onclick="desconectarArchivo()">Dejar de guardar en archivo</button>
+        <button class="primary" onclick="document.getElementById('arch').remove()">Listo</button></div></div>`
+    : `<div class="modal"><h3>💾 Guardar todo en un archivo</h3>
+        <p>Además de guardarse en el navegador, tus datos (meses, asignaciones, pagos) se van a guardar solos en un archivo de tu compu, por ejemplo en <b>C:\\resumenes</b>.
+        Así no se pierden si borrás el historial, y podés llevarlos a otra compu.</p>
+        <div class="toolbar">
+          <button class="primary" onclick="crearArchivo()">Crear archivo nuevo</button>
+          <button onclick="abrirArchivo()">Ya tengo un archivo</button>
+          <span class="sp"></span><button onclick="document.getElementById('arch').remove()">Cancelar</button></div>
+        <p class="muted" style="font-size:12.5px;margin-bottom:0">Cada vez que abras la página, el navegador te puede pedir permiso para seguir usando el archivo: tocá "Reconectar archivo" arriba y aceptá. Si el navegador ofrece "Permitir en cada visita", elegilo y no te lo vuelve a preguntar.</p></div>`;
+  document.body.appendChild(bg);
+}
+
+// ===== GOOGLE DRIVE (the same data file in the user's Drive, so the page works from any device) =====
+const DRIVE_CLIENT_ID = '';   // OAuth client ID from Google Cloud; it can also be pasted in the ☁️ dialog
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';   // only files this page creates
+const DRIVE_NOMBRE = 'gastos-tarjetas-datos.json';
+const DRIVE_KEY = 'gastosTarjetas.drive';
+const DRIVE_CID_KEY = 'gastosTarjetas.clientId';
+const DAPI = 'https://www.googleapis.com/drive/v3';
+const DUP = 'https://www.googleapis.com/upload/drive/v3/files';
+// estado: none | auth (was connected; needs a tap to get a new token) | ok
+// remoto: the "actualizado" of the last copy this device synced with Drive.
+const drive = { estado: 'none', token: null, vence: 0, fileId: null, email: '', remoto: '', ultimo: null, cliente: null, avisado: false };
+const driveOnline = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
+function driveClientId() { try { return DRIVE_CLIENT_ID || localStorage.getItem(DRIVE_CID_KEY) || ''; } catch (e) { return DRIVE_CLIENT_ID; } }
+function driveGuardarCfg() {
+  try { localStorage.setItem(DRIVE_KEY, JSON.stringify({ fileId: drive.fileId, email: drive.email, remoto: drive.remoto })); } catch (e) {}
+}
+function initDrive() {
+  let cfg = null;
+  try { cfg = JSON.parse(localStorage.getItem(DRIVE_KEY)); } catch (e) {}
+  if (cfg) { drive.fileId = cfg.fileId; drive.email = cfg.email || ''; drive.remoto = cfg.remoto || ''; drive.estado = 'auth'; }
+  cargarGIS();
+  renderDrive();
+}
+// Google's sign-in library is loaded up front: the token request must happen right inside the click.
+function cargarGIS() {
+  if (!driveOnline || !driveClientId() || document.getElementById('gis')) return;
+  const s = document.createElement('script'); s.id = 'gis'; s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+  document.head.appendChild(s);
+}
+let tokenOk, tokenMal;
+function pedirToken(prompt) {
+  return new Promise((res, rej) => {
+    if (!window.google?.accounts?.oauth2) return rej(new Error('Google todavía no cargó, probá de nuevo en unos segundos.'));
+    if (!drive.cliente) drive.cliente = google.accounts.oauth2.initTokenClient({
+      client_id: driveClientId(), scope: DRIVE_SCOPE,
+      callback: r => r.error ? tokenMal(new Error(r.error_description || r.error)) : tokenOk(r),
+      error_callback: e => tokenMal(new Error(e.type === 'popup_closed' ? 'Cerraste la ventana de Google.'
+        : e.type === 'popup_failed_to_open' ? 'El navegador bloqueó la ventana de Google: permití ventanas emergentes para esta página.' : (e.message || e.type)))
+    });
+    tokenOk = r => { drive.token = r.access_token; drive.vence = Date.now() + (r.expires_in || 3600) * 1000; res(); };
+    tokenMal = rej;
+    drive.cliente.requestAccessToken({ prompt, login_hint: drive.email || undefined });
+  });
+}
+async function driveApi(url, opt = {}) {
+  if (!drive.token || Date.now() > drive.vence - 60000) throw necesitaAuth();
+  const r = await fetch(url, { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + drive.token } });
+  if (r.status === 401) throw necesitaAuth();
+  if (!r.ok) throw new Error('Drive respondió ' + r.status);
+  return r;
+}
+function necesitaAuth() {
+  drive.token = null;
+  if (drive.estado === 'ok') {
+    drive.estado = 'auth'; renderDrive();
+    if (!drive.avisado) { drive.avisado = true; toast('☁️ Para seguir guardando en Drive tocá "Sincronizar Drive" arriba. Tus cambios ya quedaron guardados en este dispositivo.', 8000); }
+  }
+  return new Error('auth');
+}
+async function driveMeta() {
+  if (drive.fileId) {
+    try {
+      const m = await (await driveApi(`${DAPI}/files/${drive.fileId}?fields=id,trashed,appProperties`)).json();
+      if (!m.trashed) return m;
+    } catch (e) { if (e.message === 'auth') throw e; }
+  }
+  const q = encodeURIComponent(`name='${DRIVE_NOMBRE}' and trashed=false`);
+  const l = await (await driveApi(`${DAPI}/files?q=${q}&orderBy=modifiedTime desc&fields=files(id,appProperties)`)).json();
+  return (l.files || [])[0] || null;
+}
+async function driveSubir() {
+  const meta = { appProperties: { actualizado: state.actualizado || '' } };
+  if (!drive.fileId) Object.assign(meta, { name: DRIVE_NOMBRE, mimeType: 'application/json' });
+  const b = 'gastos' + uid();
+  const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n` +
+    `--${b}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(state)}\r\n--${b}--`;
+  const url = drive.fileId ? `${DUP}/${drive.fileId}?uploadType=multipart&fields=id` : `${DUP}?uploadType=multipart&fields=id`;
+  const r = await (await driveApi(url, { method: drive.fileId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + b }, body })).json();
+  drive.fileId = r.id; drive.remoto = state.actualizado || ''; drive.ultimo = new Date(); driveGuardarCfg();
+}
+// Compare this device with Drive: whichever side changed wins; if both changed since the last sync, ask.
+let driveOcupado = false, drivePendiente = false;
+async function sincronizarDrive() {
+  if (drive.estado !== 'ok') return;
+  if (driveOcupado) { drivePendiente = true; return; }
+  driveOcupado = true; renderDrive();
+  try {
+    const m = await driveMeta();
+    const remoto = m?.appProperties?.actualizado || '';
+    const local = state.actualizado || '';
+    const cambioRemoto = !!m && remoto !== drive.remoto;
+    const cambioLocal = local !== drive.remoto;
+    if (m) drive.fileId = m.id;
+    let traer = false;
+    if (m && (!Object.keys(state.meses).length || (cambioRemoto && !cambioLocal))) traer = true;
+    else if (m && cambioRemoto && cambioLocal) traer = !confirm(`Hay cambios guardados en Google Drive desde otro dispositivo${remoto ? ' (' + new Date(remoto).toLocaleString('es-AR') + ')' : ''} y también cambios en este.\n\nAceptar: quedarte con los de ESTE dispositivo (se pisan los de Drive).\nCancelar: traer los de Drive (se pierden los de acá).`);
+    if (traer) {
+      const data = await (await driveApi(`${DAPI}/files/${m.id}?alt=media`)).json();
+      if (!data || !data.meses || !data.personas) throw new Error('el archivo de Drive no tiene datos válidos');
+      state = data;
+      try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+      drive.remoto = state.actualizado || ''; drive.ultimo = new Date(); driveGuardarCfg();
+      programarEscritura(); render();
+      if (Object.keys(state.meses).length) toast('☁️ Traje tus datos de Google Drive');
+    } else if (!m || cambioLocal) await driveSubir();
+    else { drive.ultimo = new Date(); driveGuardarCfg(); }
+  } catch (e) {
+    if (e.message !== 'auth') { console.warn(e); toast('⚠ No pude sincronizar con Drive: ' + e.message, 7000); }
+  }
+  driveOcupado = false; renderDrive();
+  if (drivePendiente) { drivePendiente = false; sincronizarDrive(); }
+}
+let driveTimer;
+function programarDrive() {
+  if (drive.estado !== 'ok') return;
+  clearTimeout(driveTimer); driveTimer = setTimeout(sincronizarDrive, 1500);
+}
+async function conectarDrive() {
+  if (!driveOnline) { toast('Google Drive funciona cuando abrís la página online (GitHub Pages), no desde el archivo de tu compu.', 7000); return; }
+  if (!driveClientId()) { clickDrive(); return; }
+  try { await pedirToken(drive.email ? '' : 'consent'); }
+  catch (e) { toast('❌ ' + e.message, 7000); return; }
+  drive.estado = 'ok'; drive.avisado = false;
+  if (!drive.email) try { drive.email = (await (await driveApi(`${DAPI}/about?fields=user(emailAddress)`)).json()).user.emailAddress; } catch (e) {}
+  driveGuardarCfg();
+  document.getElementById('drv')?.remove();
+  await sincronizarDrive();
+  render();
+}
+function desconectarDrive() {
+  if (!confirm('¿Dejar de guardar en Google Drive desde este dispositivo? El archivo queda en tu Drive.')) return;
+  if (drive.token && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(drive.token, () => {});
+  Object.assign(drive, { estado: 'none', token: null, fileId: null, email: '', remoto: '', ultimo: null });
+  try { localStorage.removeItem(DRIVE_KEY); } catch (e) {}
+  document.getElementById('drv')?.remove(); renderDrive(); render();
+}
+function guardarClientId() {
+  const v = document.getElementById('drvCid').value.trim();
+  if (!/\.apps\.googleusercontent\.com$/.test(v)) { toast('Ese no parece un ID de cliente: termina en .apps.googleusercontent.com'); return; }
+  try { localStorage.setItem(DRIVE_CID_KEY, v); } catch (e) {}
+  drive.cliente = null; cargarGIS();
+  document.getElementById('drv')?.remove(); clickDrive();
+}
+function renderDrive() {
+  const b = document.getElementById('driveBtn');
+  if (!b) return;
+  b.hidden = !driveOnline;
+  b.className = drive.estado === 'auth' ? 'warnbtn' : '';
+  b.innerHTML = drive.estado === 'ok'
+    ? `☁️ Drive <span class="muted">${driveOcupado ? '· guardando…' : drive.ultimo ? '· ' + drive.ultimo.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : ''}</span>`
+    : drive.estado === 'auth' ? '☁️ Sincronizar Drive' : '☁️ Google Drive';
+}
+function clickDrive() {
+  if (drive.estado === 'auth' && driveClientId()) return conectarDrive();
+  document.getElementById('drv')?.remove();
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'drv';
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  const cerrar = `<button onclick="document.getElementById('drv').remove()">Cancelar</button>`;
+  bg.innerHTML = !driveClientId()
+    ? `<div class="modal"><h3>☁️ Google Drive</h3>
+        <p>Para guardar en tu Drive, la página necesita un <b>ID de cliente de Google</b>, que creás una sola vez en Google Cloud (es gratis).</p>
+        <input type="text" id="drvCid" placeholder="123456789-abc….apps.googleusercontent.com" style="width:100%">
+        <div class="toolbar" style="margin-top:12px"><span class="sp"></span>${cerrar}<button class="primary" onclick="guardarClientId()">Guardar</button></div></div>`
+    : drive.estado === 'ok'
+    ? `<div class="modal"><h3>☁️ Google Drive</h3>
+        <p>Tus datos se guardan solos en el Google Drive de <b>${esc(drive.email || 'tu cuenta')}</b>, en el archivo <b>${DRIVE_NOMBRE}</b>${drive.ultimo ? ' (último: ' + drive.ultimo.toLocaleString('es-AR') + ')' : ''}.</p>
+        <p class="muted">En el celular o en otra compu abrí esta misma página, tocá "☁️ Google Drive" y entrá con la misma cuenta: vas a ver todo igual. Cada vez que abras la página tocá "Sincronizar Drive" para traer lo último.</p>
+        <div class="toolbar"><button onclick="sincronizarDrive()">Sincronizar ahora</button><span class="sp"></span>
+        <button class="danger" onclick="desconectarDrive()">Desconectar</button>
+        <button class="primary" onclick="document.getElementById('drv').remove()">Listo</button></div></div>`
+    : `<div class="modal"><h3>☁️ Guardar en Google Drive</h3>
+        <p>Tus datos se van a guardar solos en un archivo de <b>tu</b> Google Drive (${DRIVE_NOMBRE}). Así los ves y los editás desde el celular o cualquier compu entrando con tu cuenta de Google.</p>
+        <p class="muted" style="font-size:12.5px">La página solo puede ver los archivos que crea ella misma, no el resto de tu Drive. Nadie más tiene acceso: ni con el link de la página.</p>
+        <div class="toolbar"><span class="sp"></span>${cerrar}<button class="primary" onclick="conectarDrive()">Conectar con Google</button></div></div>`;
+  document.body.appendChild(bg);
+}
+function bannerDrive() {
+  if (!driveOnline) return '';
+  if (drive.estado === 'auth') return `<div class="banner warn">☁️ ${Object.keys(state.meses).length ? 'Tocá para traer lo último y seguir guardando en' : 'Tocá para traer tus datos de'} tu Google Drive.
+    <button class="small primary" onclick="conectarDrive()">Sincronizar con Drive</button></div>`;
+  if (drive.estado === 'none') return `<div class="banner">💡 ${Object.keys(state.meses).length ? 'Tus datos están solo en este dispositivo.' : '¿Ya tenés tus datos en Google Drive?'}
+    <button class="small" onclick="clickDrive()">${Object.keys(state.meses).length ? 'Guardarlos en Google Drive' : 'Traerlos de Google Drive'}</button></div>`;
+  return '';
+}
+
+// ===== HELPERS =====
+const fmt = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
+const $ = n => '$ ' + fmt.format(n || 0);
+const $0 = n => '$ ' + fmt0.format(Math.round(n || 0));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const mesNombre = k => { const [y, m] = k.split('-'); return NOMBRES_MES[+m - 1] + ' ' + y; };
+const mesCorto = k => { const [y, m] = k.split('-'); return NOMBRES_MES[+m - 1].slice(0, 3) + ' ' + y.slice(2); };
+const fechaCorta = iso => { const [y, m, d] = iso.split('-'); return d + '/' + m + '/' + y.slice(2); };
+const fechaObj = f => f ? String(f.d).padStart(2, '0') + '/' + String(f.m).padStart(2, '0') + '/' + f.y : '—';
+const persona = id => state.personas.find(p => p.id === id);
+const nombre = id => id === NO_CONTAR ? 'No contar' : (persona(id)?.nombre || id);
+const mesesOrden = () => Object.keys(state.meses).sort();
+const uid = () => Math.random().toString(36).slice(2, 10);
+function personasOrden() {
+  const p = state.personas.slice();
+  p.sort((a, b) => (b.id === state.principal) - (a.id === state.principal));
+  return p;
+}
+function montoPesos(g, mes) { return (g.pesos || 0) + (g.usd || 0) * (mes.dolar || 0); }
+function totalesMes(mes) {
+  const t = {};
+  for (const g of mes.gastos) {
+    const m = montoPesos(g, mes);
+    for (const p of partes(g)) t[p.de] = (t[p.de] || 0) + m * p.frac;
+  }
+  return t;
+}
+// Per person and card: {pid: {Visa: n, Mastercard: n, Manual: n}}
+function totalesPorTarjeta(mes) {
+  const t = {};
+  for (const g of mes.gastos) {
+    const m = montoPesos(g, mes);
+    for (const p of partes(g)) { t[p.de] = t[p.de] || {}; t[p.de][g.tarjeta] = (t[p.de][g.tarjeta] || 0) + m * p.frac; }
+  }
+  return t;
+}
+const ORDEN_TARJ = ['Visa', 'Mastercard'];
+const ordenTarjetas = ts => ts.slice().sort((a, b) => ((ORDEN_TARJ.indexOf(a) + 1) || 99) - ((ORDEN_TARJ.indexOf(b) + 1) || 99));
+const nombreTarjeta = t => t === 'Manual' ? 'Otros' : t;
+// Who pays an expense: one person, nobody ("No contar") or several (split, frac sums to 1).
+function partes(g) {
+  if (g.de === DIVIDIDO && g.partes && g.partes.length) return g.partes;
+  if (g.de === NO_CONTAR || g.de === DIVIDIDO) return [];
+  return [{ de: g.de, frac: 1 }];
+}
+const fracDe = (g, pid) => partes(g).filter(p => p.de === pid).reduce((a, p) => a + p.frac, 0);
+const esDe = (g, pid) => pid === NO_CONTAR ? g.de === NO_CONTAR : partes(g).some(p => p.de === pid);
+const cambiado = g => g.de !== g.auto;
+// Assignment as stored in a remembered rule: a person id or {partes}.
+const asignacion = g => g.de === DIVIDIDO ? { partes: g.partes } : g.de;
+function aplicarAsignacion(g, a) {
+  if (a && typeof a === 'object') { g.de = DIVIDIDO; g.partes = a.partes.map(p => ({ ...p })); }
+  else { g.de = a; delete g.partes; }
+}
+const mismaAsignacion = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+let toastTimer;
+function toast(msg, ms = 4500) {
+  document.querySelectorAll('.toast').forEach(e => e.remove());
+  const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg;
+  document.body.appendChild(d); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => d.remove(), ms);
+}
+
+function titularKey(t) {
+  if (t === 'IMPUESTOS') return t;
+  const toks = t.trim().split(/\s+/);
+  if (toks.every(x => /^\d+$/.test(x))) return 'TARJETA ' + toks[toks.length - 1];
+  return toks[0] + ' ' + toks[toks.length - 1];
+}
+function personaDeTitular(t) {
+  if (t === 'IMPUESTOS') return state.principal;
+  const k = titularKey(t);
+  if (state.claves[k]) return state.claves[k];
+  // New cardholder: create a person for them (can be renamed / merged in Configuración)
+  const toks = k.split(' ');
+  const nom = toks[0] === 'TARJETA' ? 'Tarjeta ' + toks[1] : toks[0][0] + toks[0].slice(1).toLowerCase();
+  let id = nom.toLowerCase().replace(/[^a-z0-9]/g, '') || uid();
+  while (persona(id)) id += '2';
+  state.personas.push({ id, nombre: nom });
+  state.claves[k] = id;
+  return id;
+}
+// Same purchase across months (installments keep date + coupon).
+function reglaKey(tarjeta, g) {
+  if (!g.cuota) return null;
+  return [tarjeta, g.fecha, g.cupon, g.cuota.split('/')[1]].join('|');
+}
+function matchKey(g) { return [g.tarjeta, g.fecha, g.desc, g.cupon, g.cuota, g.pesos, g.usd].join('|'); }
+
+// ===== IMPORT =====
+async function importarArchivos(files) {
+  for (const f of files) {
+    try { await importar(f); }
+    catch (e) { console.error(e); toast('❌ No pude leer "' + f.name + '": ' + e.message, 8000); }
+  }
+}
+async function importar(file) {
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const lines = await extractLines(pdf);
+  const r = parseResumen(lines);
+  if (!r.gastos.length) throw new Error('no encontré gastos (¿es un resumen de BBVA?)');
+  const ref = r.vencimiento || r.cierre;
+  if (!ref) throw new Error('no encontré la fecha de vencimiento');
+  const key = ref.y + '-' + String(ref.m).padStart(2, '0');
+  const mes = state.meses[key] || (state.meses[key] = { dolar: state.dolar, resumenes: {}, gastos: [], pagado: {} });
+
+  // When re-uploading the same card/month keep the manual reassignments.
+  const previos = {}, notasPrev = {}, catPrev = {};
+  if (mes.resumenes[r.tarjeta]) {
+    if (!confirm(`Ya hay un resumen ${r.tarjeta} cargado para ${mesNombre(key)}. ¿Reemplazarlo?\n(Se mantienen los cambios de "de quién" que hiciste)`)) return;
+    for (const g of mes.gastos) if (g.tarjeta === r.tarjeta) {
+      previos[matchKey(g)] = asignacion(g);
+      if (g.nota) notasPrev[matchKey(g)] = g.nota;
+      if (g.catManual) catPrev[matchKey(g)] = g.cat;
+    }
+    mes.gastos = mes.gastos.filter(g => g.tarjeta !== r.tarjeta);
+  }
+  let recordados = 0;
+  for (const g of r.gastos) {
+    const auto = personaDeTitular(g.titular);
+    const item = {
+      id: uid(), tarjeta: r.tarjeta, fecha: g.fecha, desc: g.desc, cuota: g.cuota, cupon: g.cupon,
+      titular: g.titular, seccion: g.seccion, pesos: g.pesos, usd: g.usd, auto, de: auto
+    };
+    if (/^DEVOLUCION DE SALDOS/i.test(g.desc)) item.de = item.auto = NO_CONTAR; // offsets the "CR.RG" credit in payments
+    const rk = reglaKey(r.tarjeta, item);
+    if (rk && state.reglas[rk]) { aplicarAsignacion(item, state.reglas[rk]); recordados++; }
+    const pk = matchKey(item);
+    if (previos[pk] !== undefined) aplicarAsignacion(item, previos[pk]);
+    state.notas = state.notas || {};
+    if (rk && state.notas[rk]) item.nota = state.notas[rk];
+    if (notasPrev[pk]) item.nota = notasPrev[pk];
+    asegurarCategorias();
+    if (catPrev[pk] !== undefined) { item.cat = catPrev[pk]; item.catManual = true; }
+    else item.cat = categoriaAuto(item);
+    mes.gastos.push(item);
+  }
+  mes.resumenes[r.tarjeta] = {
+    archivo: file.name, cierre: r.cierre, vencimiento: r.vencimiento,
+    saldoPesos: r.saldoPesos, saldoUSD: r.saldoUSD, cargado: new Date().toISOString(), warnings: r.warnings
+  };
+  save();
+  ui.tab = key; ui.filtroPersona = ''; ui.filtroTarjeta = '';
+  render();
+  let msg = `✅ ${r.tarjeta} ${mesNombre(key)}: ${r.gastos.length} movimientos.`;
+  if (recordados) msg += `\n↻ ${recordados} cuota(s) asignadas según cambios que hiciste en meses anteriores.`;
+  if (r.warnings.length) msg += '\n⚠ ' + r.warnings.join('\n⚠ ');
+  else msg += '\nTotales por titular verificados contra el resumen ✓';
+  toast(msg, r.warnings.length ? 12000 : 6000);
+}
+
+// ===== ACTIONS =====
+function cambiarDe(mk, id, de) {
+  const mes = state.meses[mk];
+  const g = mes.gastos.find(x => x.id === id);
+  if (!g) return;
+  if (de === DIVIDIDO) { render(); return abrirDividir(mk, id); }
+  asignar(mk, g, de);
+}
+// a: persona id, NO_CONTAR or {partes}
+function asignar(mk, g, a) {
+  aplicarAsignacion(g, a);
+  const rk = reglaKey(g.tarjeta, g);
+  let n = 0;
+  if (rk) {
+    // Installment: remember it and apply to the following months already loaded.
+    state.reglas[rk] = a;
+    for (const k of mesesOrden()) {
+      if (k <= mk) continue;
+      for (const o of state.meses[k].gastos)
+        if (reglaKey(o.tarjeta, o) === rk && !mismaAsignacion(asignacion(o), a)) { aplicarAsignacion(o, a); n++; }
+    }
+  }
+  save(); render();
+  const quien = typeof a === 'object' ? 'dividida entre ' + a.partes.map(p => nombre(p.de)).join(', ') : 'asignada a ' + nombre(a);
+  if (rk) toast(`Cuota ${quien}. Las próximas cuotas de esta compra también${n ? ` (actualicé ${n} en meses siguientes)` : ''}.`);
+}
+
+// ===== DIVIDIR UN GASTO =====
+function abrirDividir(mk, id) {
+  const mes = state.meses[mk];
+  const g = mes.gastos.find(x => x.id === id);
+  const total = montoPesos(g, mes);
+  const actuales = partes(g);
+  const marcados = actuales.length ? actuales : [{ de: state.principal, frac: 1 }];
+  document.getElementById('div')?.remove();
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'div';
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  bg.innerHTML = `<div class="modal" style="max-width:520px">
+    <h3>✏️ Editar gasto</h3>
+    <div class="muted">${esc(g.desc)}${g.cuota ? ' · cuota ' + g.cuota : ''} · ${fechaCorta(g.fecha)}</div>
+    ${g.manual ? `<div class="toolbar" style="margin:12px 0 6px">
+        <input type="text" id="divDesc" value="${esc(g.desc)}" placeholder="Descripción" style="flex:1;min-width:160px">
+        <input type="date" id="divFecha" value="${g.fecha}">
+        $ <input type="text" id="divMonto" value="${fmt.format(g.pesos)}" style="width:120px;text-align:right" oninput="divIguales()">
+      </div>` : `<div style="font-size:22px;font-weight:650;margin:8px 0 4px">${$(total)}</div>`}
+    <div class="muted" style="font-size:12.5px;margin-bottom:12px">Marcá a quién más sumar y se divide en partes iguales. Si no es mitad y mitad, escribí el monto de cada uno.</div>
+    <div id="divRows">${personasOrden().map(p => {
+      const m = marcados.find(x => x.de === p.id);
+      return `<div class="toolbar" style="margin-bottom:6px">
+        <label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" data-p="${p.id}" ${m ? 'checked' : ''} onchange="divIguales(${total})"> ${esc(p.nombre)}</label>
+        $ <input type="text" data-m="${p.id}" value="${m ? fmt.format(Math.round(total * m.frac * 100) / 100) : ''}" style="width:130px;text-align:right" oninput="divCheck(${total})" ${m ? '' : 'disabled'}>
+      </div>`;
+    }).join('')}</div>
+    <div id="divMsg" class="muted" style="margin:8px 0"></div>
+    <h4 style="margin:16px 0 6px">📝 Nota</h4>
+    <textarea id="divNota" rows="2" placeholder="Ej: regalo de cumple para mamá, lo pagamos entre los dos" style="width:100%;font:inherit;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);resize:vertical">${esc(g.nota || '')}</textarea>
+    ${g.cuota && g.cuota.split('/')[0] !== g.cuota.split('/')[1] ? '<div class="muted" style="font-size:12.5px;margin-top:4px">Como es en cuotas, la nota también aparece en las próximas cuotas de esta compra.</div>' : ''}
+    <div class="toolbar" style="margin-top:14px">
+      <button onclick="divIguales(${total})">Partes iguales</button>
+      ${g.manual ? `<button class="danger" onclick="if(confirm('¿Borrar este gasto?')){document.getElementById('div').remove();borrarGasto('${mk}','${id}')}">🗑 Borrar gasto</button>` : ''}
+      ${g.de === DIVIDIDO ? `<button class="danger" onclick="document.getElementById('div').remove();asignar('${mk}',state.meses['${mk}'].gastos.find(x=>x.id==='${id}'),'${g.auto === DIVIDIDO ? state.principal : g.auto}')">Quitar división</button>` : ''}
+      <span class="sp"></span>
+      <button onclick="document.getElementById('div').remove()">Cancelar</button>
+      <button class="primary" id="divOk" onclick="guardarDividir('${mk}','${id}',${total})">Guardar</button>
+    </div></div>`;
+  document.body.appendChild(bg);
+  if (actuales.length > 1) divCheck(total); else divIguales(total);
+}
+const parseMonto = s => parseFloat(String(s).trim().replace(/\$/g, '').replace(/\./g, '').replace(',', '.'));
+// Manual expenses can change their amount inside the dialog.
+function divTotal(t) {
+  const i = document.getElementById('divMonto');
+  if (!i) return t;
+  const n = parseMonto(i.value);
+  return isFinite(n) ? n : 0;
+}
+function divIguales(total) {
+  total = divTotal(total);
+  const checks = [...document.querySelectorAll('#divRows [data-p]')];
+  const on = checks.filter(c => c.checked);
+  const parte = on.length ? Math.floor(total / on.length * 100) / 100 : 0;
+  checks.forEach(c => {
+    const inp = document.querySelector(`#divRows [data-m="${c.dataset.p}"]`);
+    inp.disabled = !c.checked; inp.value = c.checked ? fmt.format(parte) : '';
+  });
+  // put the rounding cents on the first one so it adds up exactly
+  if (on.length) {
+    const first = document.querySelector(`#divRows [data-m="${on[0].dataset.p}"]`);
+    first.value = fmt.format(Math.round((total - parte * (on.length - 1)) * 100) / 100);
+  }
+  divCheck(total);
+}
+function divLeer() {
+  return [...document.querySelectorAll('#divRows [data-p]')].filter(c => c.checked)
+    .map(c => ({ de: c.dataset.p, monto: parseMonto(document.querySelector(`#divRows [data-m="${c.dataset.p}"]`).value) }));
+}
+function divCheck(total) {
+  total = divTotal(total);
+  const ps = divLeer();
+  const suma = ps.reduce((a, p) => a + (isFinite(p.monto) ? p.monto : 0), 0);
+  const dif = Math.round((total - suma) * 100) / 100;
+  const ok = ps.length >= 1 && ps.every(p => isFinite(p.monto)) && Math.abs(dif) < 0.01;
+  document.getElementById('divMsg').innerHTML = !ps.length ? 'Marcá al menos una persona.'
+    : ps.length === 1 && ok ? `<span class="ok">✓ Todo para ${esc(nombre(ps[0].de))}</span> · marcá a otra persona para dividirlo`
+    : Math.abs(dif) < 0.01 ? '<span class="ok">✓ La suma da el total</span>'
+    : `<span class="bad">${dif > 0 ? 'Faltan' : 'Sobran'} ${$(Math.abs(dif))} para llegar al total</span>`;
+  document.getElementById('divOk').disabled = !ok;
+}
+function guardarDividir(mk, id, total) {
+  const mes = state.meses[mk];
+  const g = mes.gastos.find(x => x.id === id);
+  total = divTotal(total);
+  if (g.manual) {
+    const desc = document.getElementById('divDesc').value.trim();
+    if (!desc) { toast('Poné una descripción.'); return; }
+    g.desc = desc;
+    g.fecha = document.getElementById('divFecha').value || g.fecha;
+    g.pesos = total; g.usd = 0;
+  }
+  const ps = divLeer().filter(p => p.monto !== 0);
+  const a = ps.length === 1 ? ps[0].de : { partes: ps.map(p => ({ de: p.de, frac: total ? p.monto / total : 1 / ps.length })) };
+  const nota = document.getElementById('divNota').value.trim();
+  document.getElementById('div').remove();
+  setNota(mk, g, nota);
+  if (mismaAsignacion(asignacion(g), a)) { save(); render(); if (g.manual) toast('✓ Gasto actualizado'); else if (nota) toast('📝 Nota guardada' + (reglaKey(g.tarjeta, g) ? ', también para las próximas cuotas.' : '.')); }
+  else asignar(mk, g, a);
+}
+function setNota(mk, g, nota) {
+  if ((g.nota || '') === nota) return;
+  if (nota) g.nota = nota; else delete g.nota;
+  const rk = reglaKey(g.tarjeta, g);
+  if (!rk) return;
+  // Installment: the note follows the purchase into the next months.
+  state.notas = state.notas || {};
+  if (nota) state.notas[rk] = nota; else delete state.notas[rk];
+  for (const k of mesesOrden()) {
+    if (k <= mk) continue;
+    for (const o of state.meses[k].gastos) if (reglaKey(o.tarjeta, o) === rk) { if (nota) o.nota = nota; else delete o.nota; }
+  }
+}
+function setDolar(mk, v) {
+  const n = parseFloat(String(v).replace(',', '.'));
+  if (!isFinite(n)) return;
+  state.meses[mk].dolar = n; state.dolar = n; save(); render();
+}
+function togglePagado(mk, pid, ev) {
+  ev.stopPropagation();
+  const mes = state.meses[mk]; mes.pagado = mes.pagado || {};
+  mes.pagado[pid] = !mes.pagado[pid]; save(); render();
+}
+function borrarResumen(mk, tarjeta) {
+  if (!confirm(`¿Borrar el resumen ${tarjeta} de ${mesNombre(mk)} y sus gastos?`)) return;
+  const mes = state.meses[mk];
+  mes.gastos = mes.gastos.filter(g => g.tarjeta !== tarjeta);
+  delete mes.resumenes[tarjeta];
+  if (!mes.gastos.length && !Object.keys(mes.resumenes).length) { delete state.meses[mk]; ui.tab = 'resumen'; }
+  save(); render();
+}
+// Fix a statement whose card brand was detected wrong: relabel it and its expenses.
+function cambiarTarjeta(mk, de) {
+  const a = de === 'Visa' ? 'Mastercard' : 'Visa';
+  const mes = state.meses[mk];
+  if (mes.resumenes[a]) { alert(`${mesNombre(mk)} ya tiene un resumen ${a}. Borrá uno de los dos primero.`); return; }
+  if (!confirm(`¿Este resumen es de ${a}? Lo paso de ${de} a ${a} (se mantienen tus cambios).`)) return;
+  mes.resumenes[a] = mes.resumenes[de]; delete mes.resumenes[de];
+  state.notas = state.notas || {};
+  let n = 0;
+  for (const g of mes.gastos) {
+    if (g.tarjeta !== de) continue;
+    const viejo = reglaKey(de, g);
+    g.tarjeta = a;
+    const nuevo = reglaKey(a, g);
+    if (!viejo) continue;
+    // Move what was remembered under the wrong card, or pick up what the right card already remembers.
+    if (cambiado(g)) { state.reglas[nuevo] = asignacion(g); }
+    else if (state.reglas[nuevo]) { aplicarAsignacion(g, state.reglas[nuevo]); n++; }
+    delete state.reglas[viejo];
+    if (g.nota) state.notas[nuevo] = g.nota;
+    else if (state.notas[nuevo]) g.nota = state.notas[nuevo];
+    delete state.notas[viejo];
+  }
+  save(); render();
+  toast(`✓ Listo, ahora es ${a}.${n ? `\n↻ ${n} cuota(s) tomaron la asignación que ya tenían en otros meses.` : ''}`);
+}
+function borrarGasto(mk, id, preguntar) {
+  if (preguntar && !confirm('¿Borrar este gasto cargado a mano?')) return;
+  const mes = state.meses[mk];
+  mes.gastos = mes.gastos.filter(g => g.id !== id); save(); render();
+}
+function agregarManual(mk) {
+  const f = document.getElementById('man');
+  const desc = f.desc.value.trim(); const monto = parseFloat(f.monto.value.replace(/\./g, '').replace(',', '.'));
+  if (!desc || !isFinite(monto)) { toast('Completá descripción y monto.'); return; }
+  state.meses[mk].gastos.push({
+    id: uid(), tarjeta: 'Manual', fecha: f.fecha.value || (mk + '-01'), desc, cuota: '', cupon: '',
+    titular: '', seccion: 'manual', pesos: monto, usd: 0, auto: f.de.value, de: f.de.value, manual: true
+  });
+  save(); render();
+}
+function textoPersona(mk, pid) {
+  const mes = state.meses[mk];
+  const gs = mes.gastos.filter(g => esDe(g, pid)).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const porT = totalesPorTarjeta(mes)[pid] || {};
+  const tarjetas = ordenTarjetas([...new Set(gs.map(g => g.tarjeta))]);
+  let t = `Gastos de ${nombre(pid)} – ${mesNombre(mk)}\n`;
+  for (const tj of tarjetas) {
+    t += `\n*${nombreTarjeta(tj).toUpperCase()}*\n`;
+    for (const g of gs.filter(g => g.tarjeta === tj)) {
+      const f = fracDe(g, pid);
+      t += `• ${fechaCorta(g.fecha)} ${g.desc}${g.cuota ? ' (cuota ' + g.cuota + ')' : ''}: ${$(montoPesos(g, mes) * f)}`;
+      if (f < 1) t += ` (tu parte de ${$(montoPesos(g, mes))})`;
+      else if (g.usd) t += ` (USD ${fmt.format(g.usd)})`;
+      t += '\n';
+    }
+    t += `Subtotal ${nombreTarjeta(tj)}: ${$(porT[tj] || 0)}\n`;
+  }
+  t += '\n';
+  if (tarjetas.length > 1) t += tarjetas.map(tj => `${nombreTarjeta(tj)}: ${$(porT[tj] || 0)}`).join('\n') + '\n';
+  t += `*TOTAL: ${$(totalesMes(mes)[pid] || 0)}*`;
+  return t;
+}
+async function copiarPersona(mk, pid, ev) {
+  ev.stopPropagation();
+  const t = textoPersona(mk, pid);
+  try { await navigator.clipboard.writeText(t); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast(`📋 Copié el detalle de ${nombre(pid)}. Pegalo en WhatsApp o donde quieras.`);
+}
+
+// ===== RENDER =====
+function render() {
+  asegurarCategorias();
+  asegurarPresu();
+  const meses = mesesOrden();
+  if (!['resumen', 'stats', 'presu'].includes(ui.tab) && !state.meses[ui.tab]) ui.tab = 'resumen';
+  document.getElementById('tabs').innerHTML =
+    `<button class="${ui.tab === 'resumen' ? 'on' : ''}" onclick="irA('resumen')">📊 Resumen</button>` +
+    `<button class="${ui.tab === 'stats' ? 'on' : ''}" onclick="irA('stats')">📈 Estadísticas</button>` +
+    `<button class="${ui.tab === 'presu' ? 'on' : ''}" onclick="irA('presu')">💰 Ingresos y gastos</button>` +
+    meses.slice().reverse().map(k => `<button class="${ui.tab === k ? 'on' : ''}" onclick="irA('${k}')">${mesNombre(k)}</button>`).join('');
+  const main = document.getElementById('main');
+  const foco = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focus : null;
+  main.innerHTML = bannerArchivo() + (ui.tab === 'presu' ? '' : dropZone()) +
+    (ui.tab === 'resumen' ? renderResumen() : ui.tab === 'stats' ? renderStats() : ui.tab === 'presu' ? renderPresu() : renderMes(ui.tab));
+  if (ui.tab === 'stats') dibujarStats();
+  if (ui.tab === 'presu') dibujarPresu();
+  if (foco) { const el = main.querySelector(`[data-focus="${foco}"]`); if (el) { el.focus(); if (el.select) el.select(); } }
+}
+function bannerArchivo() {
+  const d = bannerDrive();
+  if (d && drive.estado === 'auth') return d;
+  if (fsSoportado && archivo.estado === 'permiso') return `<div class="banner warn">⚠ Para seguir guardando en tu archivo <b>${esc(archivo.handle.name)}</b> el navegador necesita tu permiso.
+    <button class="small primary" onclick="reconectarArchivo()">Reconectar archivo</button></div>`;
+  if (drive.estado === 'ok') return '';
+  if (d) return d;   // online: Drive instead of a local file
+  if (fsSoportado && archivo.estado === 'none' && Object.keys(state.meses).length) return `<div class="banner">💡 Tus datos están guardados solo en este navegador.
+    <button class="small" onclick="clickArchivo()">Guardarlos también en un archivo</button></div>`;
+  return '';
+}
+function irA(t, persona) { ui.tab = t; ui.filtroPersona = persona || ''; ui.filtroTarjeta = ''; ui.filtroCat = ''; ui.buscar = ''; render(); window.scrollTo(0, 0); }
+function dropZone() {
+  return `<div class="drop" id="drop">Arrastrá acá los resúmenes <b>Visa</b> o <b>Mastercard</b> en PDF (podés soltar varios a la vez) ·
+    <a href="#" onclick="document.getElementById('file').click();return false">o elegí los archivos</a>
+    <div class="muted" style="font-size:12px;margin-top:4px">Los PDF se leen acá mismo en tu navegador; no se suben a ningún lado.</div></div>`;
+}
+
+function renderResumen() {
+  const meses = mesesOrden();
+  if (!meses.length) return `<div class="card empty"><h2>Todavía no subiste ningún resumen</h2>
+    <p>Subí el PDF de la Visa o la Mastercard y te armo una pestaña con los gastos del mes,<br>separados por persona, y este resumen con lo de cada uno mes a mes.</p></div>`;
+  const pers = personasOrden();
+  const tot = {}; meses.forEach(k => tot[k] = totalesMes(state.meses[k]));
+  const ult = meses[meses.length - 1];
+  const prev = meses[meses.length - 2];
+  const yo = state.principal;
+  const mioUlt = tot[ult][yo] || 0;
+  const mioPrev = prev ? (tot[prev][yo] || 0) : null;
+  const totalUlt = Object.values(tot[ult]).reduce((a, b) => a + b, 0);
+  const aCobrar = totalUlt - mioUlt;
+  const pagadoUlt = state.meses[ult].pagado || {};
+  const pendiente = pers.filter(p => p.id !== yo && !pagadoUlt[p.id]).reduce((a, p) => a + (tot[ult][p.id] || 0), 0);
+  let delta = '';
+  if (mioPrev !== null && mioPrev > 0) {
+    const d = (mioUlt - mioPrev) / mioPrev * 100;
+    delta = `${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(0)}% vs ${mesNombre(prev)}`;
+  }
+  const visibles = pers.filter(p => meses.some(k => tot[k][p.id]));
+
+  let h = `<div class="hero">
+    <div class="stat me"><div class="lbl">Mis gastos · ${mesNombre(ult)}</div><div class="val">${$0(mioUlt)}</div><div class="hint">${esc(nombre(yo))}${delta ? ' · ' + delta : ''}</div></div>
+    <div class="stat"><div class="lbl">Total tarjetas · ${mesNombre(ult)}</div><div class="val">${$0(totalUlt)}</div><div class="hint">${Object.keys(state.meses[ult].resumenes).join(' + ') || '—'}</div></div>
+    <div class="stat"><div class="lbl">Me tienen que pasar · ${mesNombre(ult)}</div><div class="val">${$0(aCobrar)}</div><div class="hint">${pendiente > 0.5 ? 'Falta cobrar ' + $0(pendiente) : 'Todo cobrado ✓'}</div></div>
+  </div>`;
+
+  h += `<div class="card"><h2>Gastos por persona y por mes <span class="sub">Hacé clic en un monto para ver el detalle · ✓ = ya me lo pagó</span></h2><div class="tablewrap"><table>
+    <thead><tr><th>Persona</th>${meses.map(k => `<th class="n">${mesCorto(k)}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>`;
+  for (const p of visibles) {
+    const fila = meses.map(k => tot[k][p.id] || 0);
+    h += `<tr class="${p.id === yo ? 'me' : ''}"><td>${esc(p.nombre)}${p.id === yo ? ' (yo)' : ''}</td>` +
+      meses.map((k, i) => {
+        const pg = p.id !== yo && fila[i] && (state.meses[k].pagado || {})[p.id];
+        return `<td class="n clickable" onclick="irA('${k}','${p.id}')">${fila[i] ? $0(fila[i]) : '<span class="muted">—</span>'}${pg ? ' <span class="paid">✓</span>' : ''}</td>`;
+      }).join('') +
+      `<td class="n">${$0(fila.reduce((a, b) => a + b, 0))}</td></tr>`;
+  }
+  const colTot = meses.map(k => Object.values(tot[k]).reduce((a, b) => a + b, 0));
+  h += `<tr class="tot"><td>Total</td>${colTot.map(v => `<td class="n">${$0(v)}</td>`).join('')}<td class="n">${$0(colTot.reduce((a, b) => a + b, 0))}</td></tr>`;
+  h += `</tbody></table></div></div>`;
+
+  // Per card control
+  h += `<div class="card"><h2>Control por tarjeta <span class="sub">Lo que suma la página vs. el saldo del resumen</span></h2><div class="tablewrap"><table>
+    <thead><tr><th>Mes</th><th>Tarjeta</th><th>Cierre</th><th>Vencimiento</th><th class="n">Saldo resumen $</th><th class="n">Saldo U$S</th><th class="n">Gastos del mes $</th><th class="n">Gastos U$S</th><th>Archivo</th></tr></thead><tbody>`;
+  for (const k of meses.slice().reverse()) {
+    const mes = state.meses[k];
+    for (const [t, r] of Object.entries(mes.resumenes)) {
+      const gs = mes.gastos.filter(g => g.tarjeta === t);
+      const p = gs.reduce((a, g) => a + g.pesos, 0), u = gs.reduce((a, g) => a + g.usd, 0);
+      h += `<tr><td class="clickable" onclick="irA('${k}')">${mesNombre(k)}</td><td><span class="tag ${t.toLowerCase()}">${t}</span></td><td>${fechaObj(r.cierre)}</td><td>${fechaObj(r.vencimiento)}</td>
+        <td class="n">${$(r.saldoPesos)}</td><td class="n">${fmt.format(r.saldoUSD || 0)}</td><td class="n">${$(p)}</td><td class="n">${fmt.format(u)}</td>
+        <td class="muted">${esc(r.archivo)}${r.warnings && r.warnings.length ? ' <span class="bad" title="' + esc(r.warnings.join('\n')) + '">⚠</span>' : ' <span class="ok" title="Totales verificados">✓</span>'}</td></tr>`;
+    }
+  }
+  h += `</tbody></table></div><p class="muted" style="margin:10px 0 0;font-size:12.5px">El saldo del resumen incluye el saldo anterior y los pagos, por eso no tiene que coincidir con los gastos del mes. Los ✓ indican que los gastos leídos de cada titular coinciden con el "TOTAL CONSUMOS" del PDF.</p></div>`;
+  return h;
+}
+
+function renderMes(mk) {
+  const mes = state.meses[mk];
+  const tot = totalesMes(mes);
+  const yo = state.principal;
+  const pers = personasOrden().filter(p => tot[p.id] || mes.gastos.some(g => esDe(g, p.id)));
+  const maxT = Math.max(1, ...Object.values(tot));
+  const porT = totalesPorTarjeta(mes);
+  const pagado = mes.pagado || {};
+  let h = `<div class="info">`;
+  for (const [t, r] of Object.entries(mes.resumenes)) {
+    h += `<div class="chip"><span class="tag ${t.toLowerCase()}">${t}</span> cierre ${fechaObj(r.cierre)} · vence <b>${fechaObj(r.vencimiento)}</b> · saldo <b>${$(r.saldoPesos)}</b>${r.saldoUSD ? ' + U$S ' + fmt.format(r.saldoUSD) : ''}
+      ${t === 'Visa' || t === 'Mastercard' ? `<button class="small ghost" title="¿Se detectó mal la tarjeta? Cambiar a ${t === 'Visa' ? 'Mastercard' : 'Visa'}" onclick="cambiarTarjeta('${mk}','${t}')">⇄</button>` : ''}
+      <button class="small ghost danger" title="Borrar este resumen" onclick="borrarResumen('${mk}','${t}')">✕</button></div>`;
+  }
+  const hayUSD = mes.gastos.some(g => g.usd);
+  h += `<div class="chip">Dólar para pasar U$S a pesos: $ <input type="number" step="0.01" style="width:100px" value="${mes.dolar}" onchange="setDolar('${mk}',this.value)">${hayUSD ? '' : ' <span class="muted">(no hay gastos en U$S)</span>'}</div></div>`;
+
+  h += `<div class="people">`;
+  for (const p of pers) {
+    const v = tot[p.id] || 0;
+    h += `<div class="person ${p.id === yo ? 'me' : ''} ${ui.filtroPersona === p.id ? 'on' : ''}" onclick="filtrar('${p.id}')">
+      <div class="nm"><span>${esc(p.nombre)}${p.id === yo ? ' (yo)' : ''}</span>
+        <button class="small ghost" title="Copiar detalle para mandar" onclick="copiarPersona('${mk}','${p.id}',event)">📋</button></div>
+      <div class="amt">${$(v)}</div>
+      <div class="portj">${ordenTarjetas(Object.keys(porT[p.id] || {})).filter(t => Math.abs(porT[p.id][t]) >= 0.005).map(t => `<div><span class="tag ${t.toLowerCase()}">${nombreTarjeta(t)}</span><span>${$(porT[p.id][t])}</span></div>`).join('')}</div>
+      <div class="bar"><i style="width:${(v / maxT * 100).toFixed(1)}%"></i></div>
+      ${p.id === yo ? '<div class="row">Mis gastos</div>' : `<div class="row"><label onclick="togglePagado('${mk}','${p.id}',event)"><input type="checkbox" ${pagado[p.id] ? 'checked' : ''} style="pointer-events:none"> ${pagado[p.id] ? '<span class="paid">Pagado</span>' : 'Pagado'}</label></div>`}
+    </div>`;
+  }
+  h += `</div>`;
+
+  const tarjetas = [...new Set(mes.gastos.map(g => g.tarjeta))];
+  let gs = mes.gastos.slice();
+  if (ui.filtroPersona) gs = gs.filter(g => esDe(g, ui.filtroPersona));
+  if (ui.filtroTarjeta) gs = gs.filter(g => g.tarjeta === ui.filtroTarjeta);
+  if (ui.filtroCat) gs = gs.filter(g => ui.filtroCat === '_sin' ? !g.cat : g.cat === ui.filtroCat);
+  const catOpts = sel => `<option value="" ${!sel ? 'selected' : ''}>— Sin categoría</option>` +
+    state.categorias.map(c => `<option value="${esc(c)}" ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('') +
+    `<option value="_nueva">+ Nueva categoría…</option>`;
+  const nSinCat = mes.gastos.filter(g => !g.cat && partes(g).length).length;
+  if (ui.buscar) { const q = ui.buscar.toLowerCase(); gs = gs.filter(g => (g.desc + ' ' + g.titular + ' ' + (g.nota || '')).toLowerCase().includes(q)); }
+  const orden = { consumos: 0, manual: 1, impuestos: 2 };
+  gs.sort((a, b) => (orden[a.seccion] - orden[b.seccion]) || a.tarjeta.localeCompare(b.tarjeta) || a.fecha.localeCompare(b.fecha));
+  const opts = sel => personasOrden().map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('') +
+    `<option value="${DIVIDIDO}" ${sel === DIVIDIDO ? 'selected' : ''}>${sel === DIVIDIDO ? '➗ Dividido' : '➗ Dividir entre varios…'}</option>` +
+    `<option value="${NO_CONTAR}" ${sel === NO_CONTAR ? 'selected' : ''}>— No contar</option>`;
+  const nCambiados = mes.gastos.filter(cambiado).length;
+  const fp = ui.filtroPersona && ui.filtroPersona !== NO_CONTAR ? ui.filtroPersona : null;
+  const sumaVista = gs.reduce((a, g) => a + montoPesos(g, mes) * (fp ? fracDe(g, fp) : partes(g).reduce((x, q) => x + q.frac, 0)), 0);
+
+  h += `<div class="card"><h2>Movimientos de ${mesNombre(mk)} <span class="sub">Cambiá "De quién" y el monto pasa a sumar a esa persona · "Dividir" para repartirlo entre varios${nCambiados ? ` · ${nCambiados} reasignado(s), marcados en amarillo` : ''}</span></h2>
+    <div class="toolbar">
+      <select onchange="ui.filtroPersona=this.value;render()"><option value="">Todas las personas</option>${personasOrden().map(p => `<option value="${p.id}" ${ui.filtroPersona === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}<option value="${NO_CONTAR}" ${ui.filtroPersona === NO_CONTAR ? 'selected' : ''}>No contar</option></select>
+      <select onchange="ui.filtroTarjeta=this.value;render()"><option value="">Todas las tarjetas</option>${tarjetas.map(t => `<option ${ui.filtroTarjeta === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <select onchange="ui.filtroCat=this.value;render()"><option value="">Todas las categorías</option><option value="_sin" ${ui.filtroCat === '_sin' ? 'selected' : ''}>Sin categoría${nSinCat ? ' (' + nSinCat + ')' : ''}</option>${state.categorias.map(c => `<option value="${esc(c)}" ${ui.filtroCat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+      <input type="text" placeholder="Buscar comercio o nota…" value="${esc(ui.buscar)}" oninput="ui.buscar=this.value;clearTimeout(window._bt);window._bt=setTimeout(()=>{render();const i=document.querySelector('.toolbar input[type=text]');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)">
+      <span class="sp"></span><span class="muted">${gs.length} movimientos · ${$(sumaVista)}${fp ? ' (parte de ' + esc(nombre(fp)) + ')' : ''}</span>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Descripción</th><th>Cuota</th><th>Tarjeta</th><th>Titular en el resumen</th><th>De quién</th><th>Categoría</th><th class="n">Pesos</th><th class="n">U$S</th><th class="n">Total $</th><th></th></tr></thead><tbody>`;
+  for (const g of gs) {
+    const changed = cambiado(g);
+    const mem = changed && reglaKey(g.tarjeta, g) && mismaAsignacion(state.reglas[reglaKey(g.tarjeta, g)], asignacion(g));
+    const reparto = g.de === DIVIDIDO ? `<div class="split" onclick="abrirDividir('${mk}','${g.id}')" title="Editar división">${partes(g).map(q => `<span class="${q.de === fp ? 'yo' : ''}">${esc(nombre(q.de))} ${$0(montoPesos(g, mes) * q.frac)}</span>`).join('')}</div>` : '';
+    const tot$ = montoPesos(g, mes);
+    h += `<tr class="${changed ? 'changed' : ''} ${g.de === NO_CONTAR ? 'excl' : ''}">
+      <td class="pc"><button class="small ghost pencil" title="Editar: sumar a alguien más, dividir o agregar una nota" onclick="abrirDividir('${mk}','${g.id}')">✏️</button></td>
+      <td>${fechaCorta(g.fecha)}</td>
+      <td class="desc">${esc(g.desc)}${g.seccion === 'impuestos' ? ' <span class="tag">impuesto</span>' : ''}${mem ? ' <span class="tag mem" title="Esta cuota se asigna sola en los próximos meses">↻ recordado</span>' : ''}${g.nota ? `<div class="nota" onclick="abrirDividir('${mk}','${g.id}')" title="Editar nota">📝 ${esc(g.nota)}</div>` : ''}</td>
+      <td>${g.cuota || ''}</td>
+      <td><span class="tag ${g.tarjeta.toLowerCase()}">${g.tarjeta}</span></td>
+      <td class="muted">${esc(g.titular === 'IMPUESTOS' ? 'Impuestos y cargos' : g.titular ? g.titular.replace(/\b\w+/g, w => w[0] + w.slice(1).toLowerCase()) : '—')}</td>
+      <td><select class="who" onchange="cambiarDe('${mk}','${g.id}',this.value)">${opts(g.de)}</select>${reparto}</td>
+      <td><select class="cat ${g.cat ? '' : 'sincat'}" onchange="setCategoria('${mk}','${g.id}',this.value)">${catOpts(g.cat)}</select></td>
+      <td class="n ${g.pesos < 0 ? 'neg' : ''}">${g.pesos ? $(g.pesos) : ''}</td>
+      <td class="n">${g.usd ? fmt.format(g.usd) : ''}</td>
+      <td class="n ${tot$ < 0 ? 'neg' : ''}"><b>${$(tot$)}</b></td>
+      <td>${g.manual ? `<button class="small ghost danger" title="Borrar" onclick="borrarGasto('${mk}','${g.id}',true)">✕</button>` : ''}</td></tr>`;
+  }
+  if (!gs.length) h += `<tr><td colspan="12" class="muted" style="text-align:center;padding:24px">No hay movimientos con estos filtros.</td></tr>`;
+  h += `</tbody></table></div></div>`;
+
+  h += `<div class="card"><h2>Agregar gasto a mano <span class="sub">Ej: Netflix, algo pagado en efectivo, un ajuste</span></h2>
+    <form id="man" class="toolbar" onsubmit="agregarManual('${mk}');return false">
+      <input type="date" name="fecha" value="${mk}-01">
+      <input type="text" name="desc" placeholder="Descripción" style="flex:1;min-width:180px">
+      <input type="text" name="monto" placeholder="Monto $" style="width:120px">
+      <select name="de">${personasOrden().map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('')}</select>
+      <button class="primary" type="submit">Agregar</button>
+    </form></div>`;
+  return h;
+}
+// ===== ESTADÍSTICAS =====
+let charts = [];
+function colorPersona(id) {
+  const i = state.personas.findIndex(p => p.id === id);
+  const v = i >= 0 && i < 8 ? '--s' + (i + 1) : '--s-other';
+  return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+}
+function cssVar(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+// "MERPAGO*CARREFOUR" -> "CARREFOUR", "FEDERACION PAT0000600789257-006-000" -> "FEDERACION"
+function comercio(desc) {
+  let s = desc.toUpperCase().replace(/^BONIF\. CONSUMO /, '')
+    .replace(/^(MERPAGO|DLO|PAYU\*AR|OPENPAY|FUDO|GOOGLE|PAYPAL)\s*\*\s*/, '');
+  const toks = s.replace(/\*/g, ' ').split(/\s+/).filter(t => t && !/\d/.test(t) && t !== 'USD' && t.length > 1);
+  return toks.slice(0, 3).join(' ') || desc;
+}
+function mesesStats() {
+  const ms = mesesOrden();
+  return ui.statsRango === 'all' || !ui.statsRango ? ms : ms.slice(-ui.statsRango);
+}
+// Installments still to come, from the latest statement of each card.
+function cuotasPendientes() {
+  const ultimo = {};
+  for (const k of mesesOrden()) for (const t of Object.keys(state.meses[k].resumenes)) ultimo[t] = k;
+  const out = {};   // persona -> {offset: monto}
+  let maxOff = 0;
+  for (const [t, k] of Object.entries(ultimo)) {
+    const mes = state.meses[k];
+    for (const g of mes.gastos) {
+      if (g.tarjeta !== t || !g.cuota || !partes(g).length) continue;
+      const [n, N] = g.cuota.split('/').map(Number);
+      for (let i = 1; i <= N - n; i++) {
+        const [y, m] = k.split('-').map(Number);
+        const d = new Date(y, m - 1 + i, 1);
+        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        for (const q of partes(g)) {
+          out[q.de] = out[q.de] || {};
+          out[q.de][key] = (out[q.de][key] || 0) + montoPesos(g, mes) * q.frac;
+        }
+        maxOff = Math.max(maxOff, i);
+      }
+    }
+  }
+  return out;
+}
+function renderStats() {
+  const ms = mesesStats();
+  if (!ms.length) return `<div class="card empty"><h2>Todavía no hay datos</h2><p>Subí resúmenes y acá vas a ver la evolución de los gastos mes a mes.</p></div>`;
+  ui.statsPersona = ui.statsPersona || state.principal;
+  const pid = ui.statsPersona;
+  const serie = ms.map(k => pid === '_all' ? Object.values(totalesMes(state.meses[k])).reduce((a, b) => a + b, 0) : (totalesMes(state.meses[k])[pid] || 0));
+  const prom = serie.reduce((a, b) => a + b, 0) / serie.length;
+  const imax = serie.indexOf(Math.max(...serie));
+  const ult = serie[serie.length - 1];
+  const pend = cuotasPendientes();
+  const pendPers = pid === '_all' ? Object.values(pend).reduce((a, o) => a + Object.values(o).reduce((x, y) => x + y, 0), 0)
+    : Object.values(pend[pid] || {}).reduce((a, b) => a + b, 0);
+  const quien = pid === '_all' ? 'Todos' : nombre(pid);
+  const rangos = [['all', 'Todos los meses'], [3, 'Últimos 3 meses'], [6, 'Últimos 6 meses'], [12, 'Últimos 12 meses']];
+
+  let h = `<div class="toolbar">
+    <label>Ver: <select onchange="ui.statsPersona=this.value;render()">
+      ${personasOrden().map(p => `<option value="${p.id}" ${p.id === pid ? 'selected' : ''}>${esc(p.nombre)}${p.id === state.principal ? ' (yo)' : ''}</option>`).join('')}
+      <option value="_all" ${pid === '_all' ? 'selected' : ''}>Todos juntos</option></select></label>
+    <select onchange="ui.statsRango=this.value==='all'?'all':+this.value;render()">${rangos.map(([v, l]) => `<option value="${v}" ${String(ui.statsRango || 'all') === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>
+  </div>
+  <div class="hero">
+    <div class="stat ${pid === state.principal ? 'me' : ''}"><div class="lbl">Promedio mensual · ${esc(quien)}</div><div class="val">${$0(prom)}</div><div class="hint">${ms.length} mes(es)</div></div>
+    <div class="stat"><div class="lbl">Último mes · ${mesNombre(ms[ms.length - 1])}</div><div class="val">${$0(ult)}</div><div class="hint">${prom ? (ult >= prom ? '▲ ' : '▼ ') + Math.abs((ult - prom) / prom * 100).toFixed(0) + '% vs. promedio' : ''}</div></div>
+    <div class="stat"><div class="lbl">Mes más alto</div><div class="val">${$0(serie[imax])}</div><div class="hint">${mesNombre(ms[imax])}</div></div>
+    <div class="stat"><div class="lbl">Cuotas que faltan pagar</div><div class="val">${$0(pendPers)}</div><div class="hint">estimado, según las compras en cuotas del último resumen</div></div>
+  </div>
+  <div class="charts">
+    <div class="card"><h2>Gastos de ${esc(quien)} por mes</h2><div class="chartbox"><canvas id="chMio"></canvas></div></div>
+    <div class="card"><h2>Gastos de cada persona por mes <span class="sub">apilado</span></h2><div class="chartbox"><canvas id="chPers"></canvas></div></div>
+    <div class="card"><h2>Dónde se va la plata · ${esc(quien)} <span class="sub">top 10 comercios del período</span></h2><div class="chartbox tall"><canvas id="chCom"></canvas></div></div>
+    <div class="card"><h2>Cuotas comprometidas próximos meses <span class="sub">por persona</span></h2><div class="chartbox tall"><canvas id="chCuo"></canvas></div></div>
+  </div>`;
+
+  // Categories: chart + month-by-month table
+  const ct = catTotales(ms, pid);
+  const cats = Object.keys(ct).sort((a, b) => ct[b].total - ct[a].total);
+  const totCat = cats.reduce((a, c) => a + ct[c].total, 0);
+  h += `<h2 style="font-size:17px;margin:26px 0 12px">🏷 Por categoría · ${esc(quien)}</h2>
+  <div class="charts">
+    <div class="card"><h2>Total por categoría <span class="sub">${mesNombre(ms[0])}${ms.length > 1 ? ' a ' + mesNombre(ms[ms.length - 1]) : ''}</span></h2><div class="chartbox tall"><canvas id="chCat"></canvas></div></div>
+    <div class="card"><h2>Categorías mes a mes <span class="sub">apilado · las 7 principales</span></h2><div class="chartbox tall"><canvas id="chCatMes"></canvas></div></div>
+  </div>
+  <div class="card"><h2>Resumen por categoría <span class="sub">mes a mes, total y promedio del período</span></h2><div class="tablewrap"><table>
+    <thead><tr><th>Categoría</th>${ms.map(k => `<th class="n">${mesCorto(k)}</th>`).join('')}<th class="n">Total</th><th class="n">Promedio/mes</th><th class="n">%</th></tr></thead><tbody>
+    ${cats.map(c => `<tr><td>${c ? esc(c) : '<span class="muted">Sin categoría</span>'}</td>${ms.map(k => `<td class="n">${ct[c].meses[k] ? $0(ct[c].meses[k]) : '<span class="muted">—</span>'}</td>`).join('')}
+      <td class="n"><b>${$0(ct[c].total)}</b></td><td class="n">${$0(ct[c].total / ms.length)}</td><td class="n">${totCat ? (ct[c].total / totCat * 100).toFixed(1) + '%' : ''}</td></tr>`).join('')}
+    <tr class="tot"><td>Total</td>${ms.map(k => `<td class="n">${$0(cats.reduce((a, c) => a + (ct[c].meses[k] || 0), 0))}</td>`).join('')}<td class="n">${$0(totCat)}</td><td class="n">${$0(totCat / ms.length)}</td><td class="n">100%</td></tr>
+    </tbody></table></div>
+    ${ct[''] ? `<p class="muted" style="margin:10px 0 0;font-size:12.5px">Hay gastos sin categoría por ${$0(ct[''].total)}. Asignalos en la pestaña de cada mes (filtro "Sin categoría").</p>` : ''}</div>`;
+
+  // Table view of the comercios (accessibility + exact numbers)
+  const top = topComercios(ms, pid, 25);
+  h += `<div class="card"><h2>Comercios · ${esc(quien)} <span class="sub">${mesNombre(ms[0])}${ms.length > 1 ? ' a ' + mesNombre(ms[ms.length - 1]) : ''}</span></h2><div class="tablewrap"><table>
+    <thead><tr><th>Comercio</th><th class="n">Compras</th><th class="n">Total $</th><th class="n">% del total</th></tr></thead><tbody>
+    ${top.lista.map(c => `<tr><td>${esc(c.nombre)}</td><td class="n">${c.n}</td><td class="n">${$(c.total)}</td><td class="n">${top.total ? (c.total / top.total * 100).toFixed(1) + '%' : ''}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  return h;
+}
+// {cat: {total, meses: {k: monto}}} for one person's share ('_all' = everybody)
+function catTotales(ms, pid) {
+  const out = {};
+  for (const k of ms) {
+    const mes = state.meses[k];
+    for (const g of mes.gastos) {
+      if (!partes(g).length) continue;
+      const f = pid === '_all' ? 1 : fracDe(g, pid);
+      if (!f) continue;
+      const c = g.cat || '', v = montoPesos(g, mes) * f;
+      out[c] = out[c] || { total: 0, meses: {} };
+      out[c].total += v; out[c].meses[k] = (out[c].meses[k] || 0) + v;
+    }
+  }
+  return out;
+}
+// Color follows the category: the 7 biggest categories over ALL data keep their slot, the rest is gray.
+function coloresCategorias() {
+  const t = catTotales(mesesOrden(), '_all');
+  const top = Object.keys(t).filter(c => c).sort((a, b) => t[b].total - t[a].total).slice(0, 7);
+  const map = {};
+  top.forEach((c, i) => map[c] = cssVar('--s' + (i + 1)));
+  return map;
+}
+function topComercios(ms, pid, n) {
+  const acc = {}; let total = 0;
+  for (const k of ms) {
+    const mes = state.meses[k];
+    for (const g of mes.gastos) {
+      if (!partes(g).length || g.seccion === 'impuestos') continue;
+      const f = pid === '_all' ? 1 : fracDe(g, pid);
+      if (!f) continue;
+      const c = comercio(g.desc), v = montoPesos(g, mes) * f;
+      acc[c] = acc[c] || { nombre: c, total: 0, n: 0 };
+      acc[c].total += v; acc[c].n++; total += v;
+    }
+  }
+  return { total, lista: Object.values(acc).filter(c => c.total > 0).sort((a, b) => b.total - a.total).slice(0, n) };
+}
+function dibujarStats() {
+  charts.forEach(c => c.destroy()); charts = [];
+  if (typeof Chart === 'undefined') return;
+  const ms = mesesStats();
+  if (!ms.length) return;
+  const pid = ui.statsPersona;
+  const text = cssVar('--text'), muted = cssVar('--muted'), grid = cssVar('--grid'), surface = cssVar('--surface');
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  Chart.defaults.color = muted;
+  Chart.defaults.animation.duration = 300;
+  const money = v => '$ ' + fmt0.format(v);
+  const short = v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k';
+  const tooltip = { backgroundColor: text, titleColor: surface, bodyColor: surface, padding: 10, cornerRadius: 8,
+    callbacks: { label: c => ` ${c.dataset.label ? c.dataset.label + ': ' : ''}${money(c.parsed.y ?? c.parsed.x)}` } };
+  const axisY = { grid: { color: grid }, border: { display: false }, ticks: { callback: short } };
+  const axisX = { grid: { display: false }, border: { color: grid } };
+  const labels = ms.map(mesCorto);
+  const bar = { borderRadius: 4, borderSkipped: 'start', borderWidth: 0, maxBarThickness: 48 };
+
+  // 1. One person over time (single series -> no legend)
+  const serie = ms.map(k => pid === '_all' ? Object.values(totalesMes(state.meses[k])).reduce((a, b) => a + b, 0) : (totalesMes(state.meses[k])[pid] || 0));
+  const c1 = pid === '_all' ? cssVar('--s1') : colorPersona(pid);
+  charts.push(new Chart(document.getElementById('chMio'), {
+    type: ms.length > 1 ? 'line' : 'bar',
+    data: { labels, datasets: [{ label: '', data: serie, borderColor: c1, backgroundColor: c1, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: .25, ...(ms.length > 1 ? {} : bar) }] },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip }, scales: { y: { ...axisY, beginAtZero: true }, x: axisX } }
+  }));
+
+  // 2. Stacked by person
+  const pers = personasOrden().filter(p => ms.some(k => totalesMes(state.meses[k])[p.id]));
+  charts.push(new Chart(document.getElementById('chPers'), {
+    type: 'bar',
+    data: { labels, datasets: pers.map(p => ({ label: p.nombre, data: ms.map(k => totalesMes(state.meses[k])[p.id] || 0),
+      backgroundColor: colorPersona(p.id), borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, maxBarThickness: 56 })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text } },
+        tooltip: { ...tooltip, callbacks: { ...tooltip.callbacks, footer: items => 'Total: ' + money(items.reduce((a, i) => a + i.parsed.y, 0)) } } },
+      scales: { x: { ...axisX, stacked: true }, y: { ...axisY, stacked: true } } }
+  }));
+
+  // 3. Top merchants (single series, horizontal)
+  const top = topComercios(ms, pid, 10).lista;
+  charts.push(new Chart(document.getElementById('chCom'), {
+    type: 'bar',
+    data: { labels: top.map(c => c.nombre.length > 22 ? c.nombre.slice(0, 21) + '…' : c.nombre),
+      datasets: [{ label: '', data: top.map(c => c.total), backgroundColor: c1, borderRadius: 4, borderSkipped: 'start', maxBarThickness: 22 }] },
+    options: { indexAxis: 'y', maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { title: i => top[i[0].dataIndex].nombre, label: c => ` ${money(c.parsed.x)} · ${top[c.dataIndex].n} compra(s)` } } },
+      scales: { x: { ...axisY, beginAtZero: true }, y: { grid: { display: false }, border: { color: grid }, ticks: { color: text } } } }
+  }));
+
+  // 5. Categories in the period (single series, horizontal)
+  const ct = catTotales(ms, pid);
+  const cats = Object.keys(ct).sort((a, b) => ct[b].total - ct[a].total);
+  charts.push(new Chart(document.getElementById('chCat'), {
+    type: 'bar',
+    data: { labels: cats.map(c => c || 'Sin categoría'), datasets: [{ label: '', data: cats.map(c => ct[c].total), backgroundColor: c1, borderRadius: 4, borderSkipped: 'start', maxBarThickness: 22 }] },
+    options: { indexAxis: 'y', maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: { label: c => ` ${money(c.parsed.x)} · ${(c.parsed.x / cats.reduce((a, k) => a + ct[k].total, 0) * 100).toFixed(1)}%` } } },
+      scales: { x: { ...axisY, beginAtZero: true }, y: { grid: { display: false }, border: { color: grid }, ticks: { color: text } } } }
+  }));
+
+  // 6. Categories month by month: top 7 (fixed colors) + "Resto"
+  const col = coloresCategorias();
+  const principales = cats.filter(c => col[c]);
+  const resto = ms.map(k => cats.filter(c => !col[c]).reduce((a, c) => a + (ct[c].meses[k] || 0), 0));
+  const dsCat = principales.map(c => ({ label: c, data: ms.map(k => ct[c].meses[k] || 0), backgroundColor: col[c] }));
+  if (resto.some(v => v)) dsCat.push({ label: 'Resto', data: resto, backgroundColor: cssVar('--s-other') });
+  charts.push(new Chart(document.getElementById('chCatMes'), {
+    type: 'bar',
+    data: { labels, datasets: dsCat.map(d => ({ ...d, borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, maxBarThickness: 56 })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text } },
+        tooltip: { ...tooltip, filter: i => i.parsed.y !== 0, callbacks: { ...tooltip.callbacks, footer: items => 'Total: ' + money(items.reduce((a, i) => a + i.parsed.y, 0)) } } },
+      scales: { x: { ...axisX, stacked: true }, y: { ...axisY, stacked: true } } }
+  }));
+
+  // 4. Upcoming installments, stacked by person
+  const pend = cuotasPendientes();
+  const fut = [...new Set(Object.values(pend).flatMap(o => Object.keys(o)))].sort();
+  const pp = personasOrden().filter(p => pend[p.id]);
+  charts.push(new Chart(document.getElementById('chCuo'), {
+    type: 'bar',
+    data: { labels: fut.map(mesCorto), datasets: pp.map(p => ({ label: p.nombre, data: fut.map(k => pend[p.id][k] || 0),
+      backgroundColor: colorPersona(p.id), borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, maxBarThickness: 56 })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text } },
+        tooltip: { ...tooltip, callbacks: { ...tooltip.callbacks, footer: items => 'Total: ' + money(items.reduce((a, i) => a + i.parsed.y, 0)) } } },
+      scales: { x: { ...axisX, stacked: true }, y: { ...axisY, stacked: true } } }
+  }));
+}
+
+function filtrar(pid) { ui.filtroPersona = ui.filtroPersona === pid ? '' : pid; render(); }
+
+// ===== CATEGORÍAS =====
+const CATEGORIAS_BASE = ['Supermercado', 'Comida y delivery', 'Combustible', 'Autopistas y transporte', 'Servicios (luz, gas, internet, cel)',
+  'Seguros', 'Salud y farmacia', 'Ropa y calzado', 'Hogar y electro', 'Suscripciones y apps', 'Educación', 'Entretenimiento',
+  'Deportes', 'Viajes', 'Impuestos y cargos', 'Otros'];
+// Marketplaces sell everything: never remember a category for the whole merchant.
+const GENERICOS = ['MERCADOLIBRE', 'MELI', 'MERCADOPAGO'];
+const PISTAS = [
+  [/\b(COTO|CARREFOUR|MAXIDESC|JOSIMAR|JOSIMARSUPERM|DIA|VEA|JUMBO|DISCO|CHANGOMAS|VIQUEIRA|SUPERMERCADO|LA ANONIMA|CAMPOVERDE|MNBERAZMERCADO)\b/, 'Supermercado'],
+  [/(PEDIDOSYA|RAPPI|MCDONALD|BURGER|MOSTAZA|ATILIOS|LUCCIANOS|VANSHELA|HELADO|PIZZ|CAFE|PARRILLA|RESTO)/, 'Comida y delivery'],
+  [/\b(YPF|SHELL|AXION|PUMA ENERGY|ESTACION DE SERVICIO)\b/, 'Combustible'],
+  [/\b(AUTOPISTAS|AUBASA|AUSA|PEAJE|SUBE|UBER|CABIFY|DIDI)\b/, 'Autopistas y transporte'],
+  [/(METROGAS|EDENOR|EDESUR|AYSA|CLARO|TELMEX|TELECENTRO|MOVISTAR|PERSONAL FLOW|FIBERTEL)/, 'Servicios (luz, gas, internet, cel)'],
+  [/(ALLIANZ|SEGUROS|FEDERACION PA|FPATRONAL|SANCOR|MAPFRE|ZURICH|LA CAJA)/, 'Seguros'],
+  [/(FARMACIA|FARMA|OPTICA|LAOPTICASA|OSDE|SWISS MEDICAL|GALENO)/, 'Salud y farmacia'],
+  [/(SHEIN|ADIDAS|REEBOK|NIKE|SPORTLINE|DEXTER|INSTINTOSHOES|CUESTIONDEPIE|ZARA|MARKOVA|LINGERIE|SHOES)/, 'Ropa y calzado'],
+  [/(FRAVEGA|CETROGAR|GARBARINO|MUSIMUNDO|BIDCOM|SODASTREAM|SODIMAC|EASY|FERRESHOP|PRET A HOME|COLCHON)/, 'Hogar y electro'],
+  [/(NETFLIX|SPOTIFY|DISNEY|HBO|CRUNCHYROLL|YOUTUBE|GOOGLE|ADOBE|CHATGPT|OPENAI|ANTHROPIC|FACEBK|PYTHONANYWHERE|NEVERCODE|APPLE\.COM|MICROSOFT|AMAZON)/, 'Suscripciones y apps'],
+  [/(EDUCACIONIT|UNIVERSIDAD|COLEGIO|UDEMY|COURSERA)/, 'Educación'],
+  [/(CINEMARK|HOYTS|TICKETEK|PASSLINE|STPRODUCCIONES)/, 'Entretenimiento'],
+  [/(SOLONATACION|AQUABUMPS|TURNOFIT|SPORTING|CONCEPTO SPORT|NATACION|GYM)/, 'Deportes'],
+  [/(COLONIAEXPRES|DESPEGAR|AEROLINEAS|HOTEL|BOOKING|AIRBNB|FLYBONDI|JETSMART)/, 'Viajes'],
+  [/^(PAT |PATENTE|ARBA|AGIP)/, 'Impuestos y cargos'],
+];
+function categoriaAuto(g) {
+  const rk = reglaKey(g.tarjeta, g);
+  if (rk && state.catCuota[rk] !== undefined) return state.catCuota[rk];
+  if (g.seccion === 'impuestos') return 'Impuestos y cargos';
+  const c = comercio(g.desc);
+  if (!GENERICOS.includes(c) && state.catComercio[c] !== undefined) return state.catComercio[c];
+  const d = g.desc.toUpperCase();
+  for (const [re, cat] of PISTAS) if (re.test(d) && state.categorias.includes(cat)) return cat;
+  return '';
+}
+// Data saved before categories existed gets them here (called on every render, cheap).
+function asegurarCategorias() {
+  if (!state.categorias) state.categorias = CATEGORIAS_BASE.slice();
+  state.catComercio = state.catComercio || {};
+  state.catCuota = state.catCuota || {};
+  for (const m of Object.values(state.meses)) for (const g of m.gastos) if (g.cat === undefined) g.cat = categoriaAuto(g);
+}
+function setCategoria(mk, id, cat) {
+  if (cat === '_nueva') {
+    const n = prompt('Nombre de la nueva categoría:');
+    if (!n || !n.trim()) { render(); return; }
+    cat = n.trim();
+    if (!state.categorias.includes(cat)) state.categorias.push(cat);
+  }
+  const g = state.meses[mk].gastos.find(x => x.id === id);
+  g.cat = cat; g.catManual = true;
+  const rk = reglaKey(g.tarjeta, g), c = comercio(g.desc);
+  const porComercio = !GENERICOS.includes(c) && g.seccion !== 'impuestos';
+  if (rk) state.catCuota[rk] = cat;
+  if (porComercio) state.catComercio[c] = cat;
+  // Same purchase (installments) or same merchant, unless chosen by hand there.
+  let n = 0;
+  for (const m of Object.values(state.meses)) for (const o of m.gastos) {
+    if (o === g || o.catManual || o.cat === cat) continue;
+    if ((rk && reglaKey(o.tarjeta, o) === rk) || (porComercio && comercio(o.desc) === c)) { o.cat = cat; n++; }
+  }
+  save(); render();
+  if (n) toast(`🏷 "${cat || 'Sin categoría'}" también para ${n} gasto(s) más de ${porComercio ? c : 'esta compra'}. Los próximos resúmenes lo van a usar.`);
+}
+function renombrarCat(i, v) {
+  const viejo = state.categorias[i], nuevo = v.trim();
+  if (!nuevo || nuevo === viejo) return;
+  if (state.categorias.includes(nuevo)) { alert('Ya existe una categoría con ese nombre.'); refrescarConfig(); return; }
+  state.categorias[i] = nuevo;
+  for (const m of Object.values(state.meses)) for (const g of m.gastos) if (g.cat === viejo) g.cat = nuevo;
+  for (const r of [state.catComercio, state.catCuota]) for (const k in r) if (r[k] === viejo) r[k] = nuevo;
+  save(); render();
+}
+function borrarCat(i) {
+  const c = state.categorias[i];
+  const n = Object.values(state.meses).reduce((a, m) => a + m.gastos.filter(g => g.cat === c).length, 0);
+  if (!confirm(`¿Borrar la categoría "${c}"?${n ? ` Sus ${n} gasto(s) quedan sin categoría.` : ''}`)) return;
+  state.categorias.splice(i, 1);
+  for (const m of Object.values(state.meses)) for (const g of m.gastos) if (g.cat === c) { g.cat = ''; delete g.catManual; }
+  for (const r of [state.catComercio, state.catCuota]) for (const k in r) if (r[k] === c) delete r[k];
+  save(); refrescarConfig();
+}
+function nuevaCat() {
+  const n = prompt('Nombre de la nueva categoría:');
+  if (!n || !n.trim() || state.categorias.includes(n.trim())) return;
+  state.categorias.push(n.trim()); save(); refrescarConfig();
+}
+
+// ===== INGRESOS Y GASTOS (presupuesto mensual, como la hoja "Gastos Mensuales") =====
+const SECCIONES = [['ingreso', 'Ingresos', '+ Agregar ingreso'], ['gasto', 'Gastos', '+ Agregar gasto'], ['ahorro', 'Ahorro e inversión', '+ Agregar ahorro']];
+function asegurarPresu() {
+  if (state.presu) return;
+  state.presu = {
+    filas: [
+      { id: 'ing1', nombre: 'Sueldo', tipo: 'ingreso' },
+      { id: 'ing2', nombre: 'Otro sueldo', tipo: 'ingreso' },
+      { id: 'visa', nombre: 'Tarjeta Visa (mis gastos)', tipo: 'gasto', auto: 'Visa' },
+      { id: 'master', nombre: 'Tarjeta Mastercard (mis gastos)', tipo: 'gasto', auto: 'Mastercard' },
+      { id: 'g1', nombre: 'Expensas y servicios', tipo: 'gasto' },
+      { id: 'ah1', nombre: 'Ahorro', tipo: 'ahorro' }
+    ],
+    valores: {}   // 'YYYY-MM' -> { filaId: monto }
+  };
+}
+const mesKey = (y, m) => y + '-' + String(m).padStart(2, '0');
+// My share of a card in that month (from the uploaded statements), or null if not loaded.
+function autoTarjeta(k, tarjeta) {
+  const mes = state.meses[k];
+  if (!mes || !mes.resumenes[tarjeta]) return null;
+  return (totalesPorTarjeta(mes)[state.principal] || {})[tarjeta] || 0;
+}
+function valorManual(k, id) { const v = (state.presu.valores[k] || {})[id]; return v === undefined || v === null ? null : v; }
+function valorPresu(k, f) {
+  const v = valorManual(k, f.id);
+  if (v !== null) return v;
+  if (f.auto) return autoTarjeta(k, f.auto) || 0;
+  return 0;
+}
+function totalesPresu(k) {
+  const t = { ingreso: 0, gasto: 0, ahorro: 0 };
+  for (const f of state.presu.filas) t[f.tipo] += valorPresu(k, f);
+  t.queda = t.ingreso - t.gasto - t.ahorro;
+  t.hay = state.presu.filas.some(f => valorManual(k, f.id) !== null || (f.auto && autoTarjeta(k, f.auto) !== null));
+  return t;
+}
+function parsePlata(s) {
+  s = String(s).replace(/\$/g, '').replace(/\s/g, '');
+  if (!s) return null;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : NaN;
+}
+const fmtCelda = n => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(n);
+function setPresu(k, id, txt) {
+  const n = parsePlata(txt);
+  if (Number.isNaN(n)) { toast('No entendí ese número. Escribilo como 1.200.000 o 1200000.'); render(); return; }
+  state.presu.valores[k] = state.presu.valores[k] || {};
+  if (n === null) delete state.presu.valores[k][id]; else state.presu.valores[k][id] = n;
+  // render after the focus moved to the next cell, so it can be restored
+  setTimeout(() => { save(); render(); }, 0);
+}
+function aniosPresu() {
+  const ys = new Set([new Date().getFullYear()]);
+  Object.keys(state.meses).concat(Object.keys(state.presu.valores)).forEach(k => ys.add(+k.slice(0, 4)));
+  return [...ys].sort();
+}
+function agregarFila(tipo) {
+  const n = prompt(tipo === 'ingreso' ? 'Nombre del ingreso (ej: Sueldo Teco):' : tipo === 'ahorro' ? 'Nombre (ej: Dólar MEP, Plazo fijo):' : 'Nombre del gasto (ej: Expensas, Limpieza, Nafta):');
+  if (!n || !n.trim()) return;
+  state.presu.filas.push({ id: uid(), nombre: n.trim(), tipo }); save(); render();
+}
+function renombrarFila(id, v) { const f = state.presu.filas.find(x => x.id === id); if (f && v.trim()) { f.nombre = v.trim(); save(); } }
+function borrarFila(id) {
+  const f = state.presu.filas.find(x => x.id === id);
+  const usada = Object.values(state.presu.valores).some(m => m[id] !== undefined);
+  if (usada && !confirm(`¿Borrar "${f.nombre}" y todos sus valores?`)) return;
+  state.presu.filas = state.presu.filas.filter(x => x.id !== id);
+  for (const m of Object.values(state.presu.valores)) delete m[id];
+  save(); render();
+}
+function moverFila(id, d) {
+  const fs = state.presu.filas, i = fs.findIndex(x => x.id === id);
+  let j = i + d;
+  while (j >= 0 && j < fs.length && fs[j].tipo !== fs[i].tipo) j += d;
+  if (j < 0 || j >= fs.length) return;
+  [fs[i], fs[j]] = [fs[j], fs[i]]; save(); render();
+}
+// Fixed expenses repeat: fill the empty cells of a month with the previous month's values.
+function copiarMesAnterior(k) {
+  const [y, m] = k.split('-').map(Number);
+  const prev = m === 1 ? mesKey(y - 1, 12) : mesKey(y, m - 1);
+  const pv = state.presu.valores[prev] || {};
+  state.presu.valores[k] = state.presu.valores[k] || {};
+  let n = 0;
+  for (const f of state.presu.filas) {
+    if (f.auto) continue;
+    if (pv[f.id] !== undefined && state.presu.valores[k][f.id] === undefined) { state.presu.valores[k][f.id] = pv[f.id]; n++; }
+  }
+  save(); render();
+  toast(n ? `Copié ${n} valor(es) de ${mesNombre(prev)} a ${mesNombre(k)}.` : `No había nada para copiar de ${mesNombre(prev)} (o ${mesNombre(k)} ya estaba completo).`);
+}
+// Months shown: the last 8 (default, up to this month or the latest statement) or a whole year.
+function mesesPresu() {
+  const vista = ui.presuVista || 'ult8';
+  if (vista !== 'ult8') return Array.from({ length: 12 }, (_, i) => mesKey(+vista, i + 1));
+  const hoy = new Date();
+  let fin = mesKey(hoy.getFullYear(), hoy.getMonth() + 1);
+  const ultimo = mesesOrden().slice(-1)[0];
+  if (ultimo && ultimo > fin) fin = ultimo;
+  const [fy, fm] = fin.split('-').map(Number);
+  return Array.from({ length: 8 }, (_, i) => { const d = new Date(fy, fm - 8 + i, 1); return mesKey(d.getFullYear(), d.getMonth() + 1); });
+}
+function renderPresu() {
+  const anios = aniosPresu();
+  const hoy = new Date();
+  if (ui.presuVista && ui.presuVista !== 'ult8' && !anios.includes(+ui.presuVista)) ui.presuVista = 'ult8';
+  const vista = ui.presuVista || 'ult8';
+  const ks = mesesPresu();
+  const y = vista === 'ult8' ? 'últimos 8 meses' : vista;
+  const tots = Object.fromEntries(ks.map(k => [k, totalesPresu(k)]));
+  const conDatos = ks.filter(k => tots[k].hay);
+  const kAct = mesKey(hoy.getFullYear(), hoy.getMonth() + 1);
+  const kHero = ks.includes(kAct) ? kAct : (conDatos[conDatos.length - 1] || ks[0]);
+  const th = tots[kHero];
+  const prom = arr => { const v = arr.filter(x => x); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
+  const signo = v => `<span class="${v < 0 ? 'bad' : 'ok'}">${v < 0 ? '−' : ''}$ ${fmt0.format(Math.abs(Math.round(v)))}</span>`;
+
+  let h = `<div class="toolbar">
+    <label>Ver: <select onchange="ui.presuVista=this.value;render()">
+      <option value="ult8" ${vista === 'ult8' ? 'selected' : ''}>Últimos 8 meses</option>
+      ${anios.map(a => `<option value="${a}" ${String(vista) === String(a) ? 'selected' : ''}>Año ${a}</option>`).join('')}</select></label>
+    <span class="sp"></span>
+    <input type="file" id="xlsIn" accept=".xlsx" hidden onchange="importarExcel(this.files[0]);this.value=''">
+    <button onclick="document.getElementById('xlsIn').click()">⬆ Importar de mi Excel</button>
+  </div>
+  <div class="hero">
+    <div class="stat"><div class="lbl">Ingresos · ${mesNombre(kHero)}</div><div class="val">${$0(th.ingreso)}</div></div>
+    <div class="stat"><div class="lbl">Gastos · ${mesNombre(kHero)}</div><div class="val">${$0(th.gasto)}</div><div class="hint">${th.ingreso ? (th.gasto / th.ingreso * 100).toFixed(0) + '% de los ingresos' : ''}</div></div>
+    <div class="stat"><div class="lbl">Ahorro · ${mesNombre(kHero)}</div><div class="val">${$0(th.ahorro)}</div></div>
+    <div class="stat ${th.queda >= 0 ? 'me' : ''}"><div class="lbl">Me queda · ${mesNombre(kHero)}</div><div class="val">${signo(th.queda)}</div><div class="hint">ingresos − gastos − ahorro</div></div>
+  </div>
+  <div class="card"><h2>Ingresos y gastos · ${y} <span class="sub">Escribí en cada celda · las tarjetas se completan solas con tu parte del resumen (si escribís un valor, se usa el tuyo) · ⇠ copia los valores del mes anterior</span></h2>
+  <div class="tablewrap presuwrap"><table class="presu"><thead><tr><th class="concepto">Concepto</th>
+    ${ks.map(k => `<th class="n">${vista === 'ult8' ? mesCorto(k) : NOMBRES_MES[+k.slice(5) - 1].slice(0, 3)} <button class="small ghost" title="Copiar del mes anterior lo que falte" onclick="copiarMesAnterior('${k}')">⇠</button></th>`).join('')}
+    <th class="n">Total</th><th class="n">Promedio</th></tr></thead><tbody>`;
+  for (const [tipo, titulo, mas] of SECCIONES) {
+    const filas = state.presu.filas.filter(f => f.tipo === tipo);
+    h += `<tr class="sec"><td colspan="${ks.length + 3}"><span class="seclbl">${titulo}</span></td></tr>`;
+    for (const f of filas) {
+      const vals = ks.map(k => valorPresu(k, f));
+      h += `<tr><td class="concepto"><div class="fila">
+          <input type="text" class="nom" value="${esc(f.nombre)}" onchange="renombrarFila('${f.id}',this.value)" title="${f.auto ? 'Se completa sola con tu parte de la ' + f.auto : 'Renombrar'}">
+          <button class="small ghost" title="Subir" onclick="moverFila('${f.id}',-1)">↑</button><button class="small ghost" title="Bajar" onclick="moverFila('${f.id}',1)">↓</button>
+          ${f.auto ? '<span class="tag mem" title="Automático desde los resúmenes">auto</span>' : `<button class="small ghost danger" title="Borrar fila" onclick="borrarFila('${f.id}')">✕</button>`}
+        </div></td>` +
+        ks.map(k => {
+          const man = valorManual(k, f.id), au = f.auto ? autoTarjeta(k, f.auto) : null;
+          const ph = au !== null ? fmtCelda(Math.round(au)) : '';
+          return `<td class="n"><input type="text" class="celda ${f.auto && man === null && au !== null ? 'esauto' : ''} ${f.auto && man !== null ? 'override' : ''}" data-focus="p|${k}|${f.id}"
+            value="${man !== null ? fmtCelda(Math.round(man)) : ''}" data-exact="${man !== null && man !== Math.round(man) ? fmtCelda(man) : ''}" placeholder="${ph}" title="${au !== null ? 'Automático: ' + $(au) + (man !== null ? ' · borrá el valor para volver al automático' : '') : ''}"
+            onchange="setPresu('${k}','${f.id}',this.value)" onfocus="if(this.dataset.exact)this.value=this.dataset.exact;this.select()"></td>`;
+        }).join('') +
+        `<td class="n"><b>${$0(vals.reduce((a, b) => a + b, 0))}</b></td><td class="n muted">${$0(prom(vals))}</td></tr>`;
+    }
+    h += `<tr class="addrow"><td colspan="${ks.length + 3}"><button class="small ghost" onclick="agregarFila('${tipo}')">${mas}</button></td></tr>`;
+    const st = ks.map(k => tots[k][tipo]);
+    h += `<tr class="sub"><td>Total ${titulo.toLowerCase()}</td>${st.map(v => `<td class="n">${v ? $0(v) : '<span class="muted">—</span>'}</td>`).join('')}<td class="n">${$0(st.reduce((a, b) => a + b, 0))}</td><td class="n">${$0(prom(st))}</td></tr>`;
+  }
+  const q = ks.map(k => tots[k].hay ? tots[k].queda : null);
+  let acc = 0;
+  const acum = q.map(v => v === null ? null : (acc += v));
+  h += `<tr class="queda"><td>Me queda</td>${q.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td class="n">${signo(q.reduce((a, b) => a + (b || 0), 0))}</td><td class="n">${signo(prom(q.map(v => v || 0)))}</td></tr>
+    <tr class="sub"><td>Acumulado ${vista === 'ult8' ? 'de los 8 meses' : 'del año'}</td>${acum.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td></td><td></td></tr>`;
+  h += `</tbody></table></div></div>
+  <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>`;
+  return h;
+}
+function dibujarPresu() {
+  charts.forEach(c => c.destroy()); charts = [];
+  if (typeof Chart === 'undefined' || !document.getElementById('chPresu')) return;
+  const ks = mesesPresu();
+  const tots = ks.map(totalesPresu);
+  const text = cssVar('--text'), muted = cssVar('--muted'), grid = cssVar('--grid'), surface = cssVar('--surface');
+  Chart.defaults.color = muted; Chart.defaults.animation.duration = 300;
+  const money = v => '$ ' + fmt0.format(Math.round(v));
+  charts.push(new Chart(document.getElementById('chPresu'), {
+    type: 'bar',
+    data: { labels: ks.map(mesCorto), datasets: [
+      { label: 'Ingresos', data: tots.map(t => t.ingreso), backgroundColor: cssVar('--s1'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 26 },
+      { label: 'Egresos', data: tots.map(t => t.gasto + t.ahorro), backgroundColor: cssVar('--s2'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 26 }] },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text } },
+        tooltip: { backgroundColor: text, titleColor: surface, bodyColor: surface, padding: 10, cornerRadius: 8,
+          callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}`, footer: i => 'Me queda: ' + money(tots[i[0].dataIndex].queda) } } },
+      scales: { x: { grid: { display: false }, border: { color: grid } },
+        y: { grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k' } } } }
+  }));
+}
+// Import the "Gastos Mensuales" sheet(s) of the old spreadsheet: names in column A, months as columns.
+async function importarExcel(file) {
+  if (!file) return;
+  try {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await file.arrayBuffer());
+    const hojas = wb.worksheets.filter(w => /gastos mensuales/i.test(w.name));
+    if (!hojas.length) throw new Error('no encontré ninguna hoja llamada "Gastos Mensuales"');
+    const plan = [];
+    for (const ws of hojas) {
+      let headRow = null, cols = {};
+      for (let r = 1; r <= 15 && !headRow; r++) {
+        const c = {};
+        ws.getRow(r).eachCell((cell, col) => {
+          const i = NOMBRES_MES.findIndex(m => String(cell.value || '').trim().toLowerCase() === m.toLowerCase());
+          if (i >= 0) c[col] = i + 1;
+        });
+        if (Object.keys(c).length >= 6) { headRow = r; cols = c; }
+      }
+      if (!headRow) continue;
+      const ym = ws.name.match(/(\d{4})/);
+      let anio = ym ? +ym[1] : null;
+      if (!anio) {
+        const r = prompt(`¿De qué año es la hoja "${ws.name}"?`, String(new Date().getFullYear()));
+        if (!r) continue;
+        anio = parseInt(r, 10);
+      }
+      let despuesDelTotal = false;
+      for (let r = headRow + 1; r <= ws.rowCount; r++) {
+        const row = ws.getRow(r);
+        const nombre = String(row.getCell(1).value ?? '').trim();
+        if (!nombre) continue;
+        if (/^total/i.test(nombre)) { despuesDelTotal = true; continue; }
+        if (/^(resta|me queda|saldo|queda)/i.test(nombre)) continue;
+        const vals = {};
+        for (const [col, m] of Object.entries(cols)) {
+          const v = row.getCell(+col).value;
+          if (typeof v === 'number') vals[mesKey(anio, m)] = v;
+        }
+        if (!Object.keys(vals).length) continue;
+        let tipo = 'gasto', auto = null;
+        if (despuesDelTotal || /sueldo|ingreso|aguinaldo|cobro/i.test(nombre)) tipo = 'ingreso';
+        else if (/ahorro|d[oó]lar|mep|acciones|plazo fijo|invers|cedear|fci/i.test(nombre)) tipo = 'ahorro';
+        if (/tarjeta\s*visa/i.test(nombre)) auto = 'Visa';
+        else if (/tarjeta\s*master/i.test(nombre)) auto = 'Mastercard';
+        plan.push({ nombre, tipo, auto, vals, anio });
+      }
+    }
+    if (!plan.length) throw new Error('no encontré filas con números en la hoja');
+    const anios = [...new Set(plan.map(p => p.anio))].join(', ');
+    if (!confirm(`Voy a cargar ${plan.length} fila(s) de tu Excel en ${anios}:\n\n${plan.map(p => '• ' + p.nombre + ' (' + (p.tipo === 'ingreso' ? 'ingreso' : p.tipo === 'ahorro' ? 'ahorro' : 'gasto') + ')').join('\n')}\n\nSi ya habías escrito valores en esas celdas, se reemplazan. Las tarjetas de los meses que ya subiste siguen usando el resumen. ¿Seguir?`)) return;
+    for (const p of plan) {
+      let f = p.auto ? state.presu.filas.find(x => x.auto === p.auto)
+        : state.presu.filas.find(x => !x.auto && x.tipo === p.tipo && x.nombre.toLowerCase() === p.nombre.toLowerCase());
+      if (!f) { f = { id: uid(), nombre: p.nombre[0].toUpperCase() + p.nombre.slice(1), tipo: p.tipo }; state.presu.filas.push(f); }
+      for (const [k, v] of Object.entries(p.vals)) {
+        if (p.auto && autoTarjeta(k, p.auto) !== null) continue;   // the statement is the source of truth
+        state.presu.valores[k] = state.presu.valores[k] || {};
+        state.presu.valores[k][f.id] = v;
+      }
+    }
+    // Drop the starter rows that stayed empty.
+    state.presu.filas = state.presu.filas.filter(f => f.auto || !['ing1', 'ing2', 'g1', 'ah1'].includes(f.id) || Object.values(state.presu.valores).some(m => m[f.id] !== undefined));
+    ui.presuVista = String(plan[0].anio);
+    save(); render();
+    toast(`✅ Importé ${plan.length} fila(s) de "${file.name}".`);
+  } catch (e) { console.error(e); toast('❌ No pude importar el Excel: ' + e.message, 8000); }
+}
+
+// ===== CONFIG =====
+function abrirConfig() {
+  const claves = Object.keys(state.claves).sort();
+  const opts = sel => state.personas.map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('');
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'cfg';
+  bg.onclick = e => { if (e.target === bg) cerrarConfig(); };
+  bg.innerHTML = `<div class="modal">
+    <h3>Configuración</h3><div class="muted">Los cambios se guardan solos en este navegador.</div>
+    <h4>Yo soy</h4>
+    <select onchange="state.principal=this.value;save();render()">${opts(state.principal)}</select>
+    <span class="muted"> · Los impuestos de la tarjeta se asignan a esta persona por defecto.</span>
+    <h4>Personas</h4>
+    <div id="cfgPers">${state.personas.map(p => `<div class="toolbar" style="margin-bottom:6px">
+      <input type="text" value="${esc(p.nombre)}" onchange="renombrar('${p.id}',this.value)" style="flex:1">
+      <button class="small danger" onclick="borrarPersona('${p.id}')">Eliminar</button></div>`).join('')}</div>
+    <button class="small" onclick="nuevaPersona()">+ Agregar persona</button>
+    <span class="muted" style="font-size:12.5px"> (ej: "Mamá Euge", "Casa", para reasignar gastos)</span>
+    <h4>Titulares del resumen → persona</h4>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">Cómo aparece cada uno en el PDF y a quién corresponde. Si aparece una tarjeta nueva, se crea sola y la podés asignar acá.</div>
+    <div class="grid">${claves.map(k => `<div>${esc(k)}</div><select onchange="state.claves['${k}']=this.value;reasignarClave('${k}',this.value)">${opts(state.claves[k])}</select><div></div>`).join('')}</div>
+    <h4>Categorías</h4>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">Los tipos de gasto del desplegable "Categoría". Si renombrás una, se actualizan todos sus gastos.</div>
+    ${state.categorias.map((c, i) => `<div class="toolbar" style="margin-bottom:6px">
+      <input type="text" value="${esc(c)}" onchange="renombrarCat(${i},this.value)" style="flex:1">
+      <button class="small danger" onclick="borrarCat(${i})">Eliminar</button></div>`).join('')}
+    <button class="small" onclick="nuevaCat()">+ Agregar categoría</button>
+    <h4>Copia de seguridad</h4>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">Todo queda guardado en este navegador. Bajate una copia de vez en cuando por si borrás los datos del navegador o cambiás de compu.</div>
+    <div class="toolbar">
+      <button onclick="backup()">⬇ Descargar copia (.json)</button>
+      <button onclick="document.getElementById('restore').click()">⬆ Restaurar copia</button>
+      <input type="file" id="restore" accept=".json" hidden onchange="restaurar(this.files[0])">
+      <span class="sp"></span><button class="danger" onclick="resetTodo()">Borrar todo</button>
+    </div>
+    <div style="text-align:right;margin-top:18px"><button class="primary" onclick="cerrarConfig()">Listo</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+}
+function cerrarConfig() { document.getElementById('cfg')?.remove(); render(); }
+function refrescarConfig() { cerrarConfig(); abrirConfig(); }
+function renombrar(id, v) { const p = persona(id); if (p && v.trim()) { p.nombre = v.trim(); save(); render(); } }
+function nuevaPersona() {
+  const n = prompt('Nombre de la persona:'); if (!n || !n.trim()) return;
+  let id = n.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '') || uid();
+  while (persona(id)) id += '2';
+  state.personas.push({ id, nombre: n.trim() }); save(); refrescarConfig();
+}
+function borrarPersona(id) {
+  const usado = Object.values(state.meses).some(m => m.gastos.some(g => esDe(g, id) || g.auto === id)) || Object.values(state.claves).includes(id);
+  if (usado) { alert('Esta persona tiene gastos o es titular de una tarjeta. Primero reasigná esos gastos / el titular a otra persona.'); return; }
+  if (id === state.principal) { alert('No podés eliminar a la persona principal.'); return; }
+  state.personas = state.personas.filter(p => p.id !== id); save(); refrescarConfig();
+}
+function reasignarClave(k, pid) {
+  // Move the expenses of that cardholder that were not reassigned by hand.
+  for (const m of Object.values(state.meses)) for (const g of m.gastos) {
+    if (g.titular && titularKey(g.titular) === k) { if (g.de === g.auto) g.de = pid; g.auto = pid; }
+  }
+  save(); render();
+}
+function backup() {
+  const blob = new Blob([JSON.stringify(state, null, 1)], { type: 'application/json' });
+  descargar(blob, 'gastos-tarjetas-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+}
+async function restaurar(f) {
+  if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    if (!s.meses || !s.personas) throw new Error('no parece una copia de esta página');
+    if (!confirm('Esto reemplaza todos los datos actuales por los de la copia. ¿Seguir?')) return;
+    state = s; save(); refrescarConfig(); toast('Copia restaurada ✓');
+  } catch (e) { toast('❌ ' + e.message); }
+}
+function resetTodo() {
+  if (!confirm('¿Borrar TODOS los meses, personas y configuración? Esto no se puede deshacer (salvo que tengas una copia).')) return;
+  state = defaultState(); save(); ui.tab = 'resumen'; refrescarConfig();
+}
+function descargar(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// ===== EXCEL =====
+async function exportarExcel() {
+  const meses = mesesOrden();
+  if (!meses.length) { toast('Primero subí algún resumen.'); return; }
+  asegurarPresu();
+  // Budget values with the card rows already resolved (the workbook builder has no access to the statements).
+  const presu = aniosPresu().map(y => {
+    const ks = Array.from({ length: 12 }, (_, i) => mesKey(y, i + 1));
+    return { anio: y, filas: state.presu.filas.map(f => ({ nombre: f.nombre, tipo: f.tipo, valores: ks.map(k => valorPresu(k, f)) })) };
+  }).filter(p => p.filas.some(f => f.valores.some(v => v)));
+  const wb = buildWorkbook(ExcelJS, state, { presu });
+  const buf = await wb.xlsx.writeBuffer();
+  const y = [...new Set(meses.map(k => k.slice(0, 4)))].join('-');
+  descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Gastos tarjetas ${y}.xlsx`);
+}
+// Builds the workbook: "Resumen" (people x months, formulas) + one sheet per month.
+function buildWorkbook(ExcelJS, st, extra) {
+  const MESES_N = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const NONE = '_none', SPLIT = '_split';
+  const mesN = k => { const [y, m] = k.split('-'); return MESES_N[+m - 1] + ' ' + y; };
+  const nom = id => id === NONE ? 'No contar' : ((st.personas.find(p => p.id === id) || {}).nombre || id);
+  const pers = st.personas.slice().sort((a, b) => (b.id === st.principal) - (a.id === st.principal));
+  const keys = Object.keys(st.meses).sort();
+  const money = '"$" #,##0.00;[Red]-"$" #,##0.00';
+  const usdFmt = '#,##0.00';
+  const head = { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2457D6' } } };
+  const meFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE3F5EE' } };
+  const chgFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2B3' } };
+  const style = (cell, s) => Object.assign(cell, s);
+  const q = name => "'" + name.replace(/'/g, "''") + "'";
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Gastos de Tarjetas';
+  wb.calcProperties.fullCalcOnLoad = true;
+  const res = wb.addWorksheet('Resumen', { views: [{ state: 'frozen', xSplit: 1, ySplit: 3 }] });
+  const catWs = wb.addWorksheet('Categorías', { views: [{ state: 'frozen', xSplit: 1, ySplit: 3 }] });
+  // Ingresos y gastos (one sheet per year), like the old "Gastos Mensuales" sheet
+  for (const py of (extra && extra.presu) || []) {
+    const ws = wb.addWorksheet('Ingresos y gastos ' + py.anio, { views: [{ state: 'frozen', xSplit: 1, ySplit: 3 }] });
+    ws.getCell('A1').value = 'Ingresos y gastos ' + py.anio;
+    ws.getCell('A1').font = { bold: true, size: 14 };
+    ws.getCell('A3').value = 'Concepto'; style(ws.getCell('A3'), head);
+    MESES_N.forEach((m, i) => { const c = ws.getCell(3, 2 + i); c.value = m; style(c, head); c.alignment = { horizontal: 'center' }; });
+    ws.getCell(3, 14).value = 'Total'; style(ws.getCell(3, 14), head);
+    const L = n => ws.getColumn(n).letter;
+    let r = 4;
+    const subt = {};
+    for (const [tipo, titulo] of [['ingreso', 'Ingresos'], ['gasto', 'Gastos'], ['ahorro', 'Ahorro e inversión']]) {
+      ws.getCell(r, 1).value = titulo.toUpperCase(); ws.getCell(r, 1).font = { bold: true, color: { argb: 'FF6B7385' } };
+      r++;
+      const desde = r;
+      for (const f of py.filas.filter(x => x.tipo === tipo)) {
+        ws.getCell(r, 1).value = f.nombre;
+        f.valores.forEach((v, i) => { if (v) { ws.getCell(r, 2 + i).value = Math.round(v * 100) / 100; ws.getCell(r, 2 + i).numFmt = money; } });
+        ws.getCell(r, 14).value = { formula: `SUM(B${r}:M${r})`, result: f.valores.reduce((a, b) => a + b, 0) };
+        ws.getCell(r, 14).numFmt = money; ws.getCell(r, 14).font = { bold: true };
+        r++;
+      }
+      const hasta = r - 1;
+      ws.getCell(r, 1).value = 'Total ' + titulo.toLowerCase(); ws.getCell(r, 1).font = { bold: true };
+      for (let c = 2; c <= 14; c++) {
+        const cell = ws.getCell(r, c);
+        const res = py.filas.filter(x => x.tipo === tipo).reduce((a, f) => a + (c <= 13 ? f.valores[c - 2] : f.valores.reduce((x, y) => x + y, 0)), 0);
+        cell.value = hasta >= desde ? { formula: `SUM(${L(c)}${desde}:${L(c)}${hasta})`, result: res } : 0;
+        cell.numFmt = money; cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F2F5' } };
+      }
+      subt[tipo] = r;
+      r += 2;
+    }
+    ws.getCell(r, 1).value = 'Me queda'; ws.getCell(r, 1).font = { bold: true, size: 12 };
+    for (let c = 2; c <= 14; c++) {
+      const cell = ws.getCell(r, c);
+      const col = L(c);
+      const v = t => (ws.getCell(subt[t], c).value || {}).result || 0;
+      cell.value = { formula: `${col}${subt.ingreso}-${col}${subt.gasto}-${col}${subt.ahorro}`, result: v('ingreso') - v('gasto') - v('ahorro') };
+      cell.numFmt = money; cell.font = { bold: true, size: 12 };
+      cell.border = { top: { style: 'medium' } };
+    }
+    ws.getColumn(1).width = 34;
+    for (let c = 2; c <= 14; c++) ws.getColumn(c).width = 14;
+  }
+
+  // Month sheets first (Resumen references them), Resumen stays as the first tab.
+  const info = {};   // key -> {sheet, first, last, totals}
+  for (const k of keys) {
+    const mes = st.meses[k];
+    const ws = wb.addWorksheet(mesN(k), { views: [{ state: 'frozen', ySplit: 7 }] });
+    const usados = pers.filter(p => mes.gastos.some(g => g.de === p.id || (g.partes || []).some(q => q.de === p.id)));
+    ws.getCell('A1').value = 'Gastos ' + mesN(k);
+    ws.getCell('A1').font = { bold: true, size: 14 };
+    ws.getCell('A2').value = 'Dólar';
+    ws.getCell('B2').value = mes.dolar || 0; ws.getCell('B2').numFmt = money;
+    const tarjetas = Object.entries(mes.resumenes || {}).map(([t, r]) => {
+      const v = r.vencimiento ? `${String(r.vencimiento.d).padStart(2, '0')}/${String(r.vencimiento.m).padStart(2, '0')}/${r.vencimiento.y}` : '';
+      return `${t} vence ${v}`;
+    }).join(' · ');
+    ws.getCell('D2').value = tarjetas; ws.getCell('D2').font = { italic: true, color: { argb: 'FF6B7385' } };
+
+    const ord = id => { const i = pers.findIndex(p => p.id === id); return i < 0 ? 999 : i; };
+    const filas = [];
+    for (const g of mes.gastos) {
+      if (g.de === SPLIT && g.partes && g.partes.length) {
+        const tot = g.pesos + g.usd * (mes.dolar || 0);
+        g.partes.forEach(p => filas.push({ ...g, de: p.de, auto: null,
+          desc: `${g.desc} (dividido: ${Math.round(p.frac * 100)}% de $ ${tot.toLocaleString('es-AR', { maximumFractionDigits: 2 })})`,
+          pesos: Math.round(g.pesos * p.frac * 100) / 100, usd: Math.round(g.usd * p.frac * 100) / 100 }));
+      } else filas.push(g);
+    }
+    const gs = filas.slice().sort((a, b) => ord(a.de) - ord(b.de) || a.tarjeta.localeCompare(b.tarjeta) || a.fecha.localeCompare(b.fecha));
+    const first = 8, last = Math.max(first, first + gs.length - 1);
+    const rngF = `$F$${first}:$F$${last}`, rngI = `$I$${first}:$I$${last}`;
+
+    // Totals per person (row 4 names, row 5 SUMIF)
+    ws.getCell('A4').value = 'De quién'; ws.getCell('A5').value = 'Total $';
+    ws.getCell('A4').font = ws.getCell('A5').font = { bold: true };
+    const totals = {};
+    for (const g of gs) if (g.de !== NONE) totals[g.de] = (totals[g.de] || 0) + g.pesos + g.usd * (mes.dolar || 0);
+    usados.forEach((p, i) => {
+      const c4 = ws.getCell(4, 2 + i), c5 = ws.getCell(5, 2 + i);
+      c4.value = p.nombre; style(c4, head); c4.alignment = { horizontal: 'center' };
+      c5.value = { formula: `SUMIF(${rngF},${c4.address},${rngI})`, result: Math.round((totals[p.id] || 0) * 100) / 100 };
+      c5.numFmt = money; c5.font = { bold: true };
+      if (p.id === st.principal) c5.fill = meFill;
+    });
+
+    const cols = ['Fecha', 'Descripción', 'Cuota', 'Tarjeta', 'Titular en resumen', 'De quién', 'Pesos', 'U$S', 'Total $', 'Nota', 'Categoría'];
+    cols.forEach((c, i) => { const cell = ws.getCell(7, i + 1); cell.value = c; style(cell, head); });
+    gs.forEach((g, i) => {
+      const r = first + i;
+      const [y, m, d] = g.fecha.split('-').map(Number);
+      const row = ws.getRow(r);
+      row.values = [new Date(Date.UTC(y, m - 1, d)), g.desc, g.cuota, g.tarjeta,
+        g.titular === 'IMPUESTOS' ? 'Impuestos y cargos' : g.titular, nom(g.de), g.pesos || 0, g.usd || 0,
+        { formula: `G${r}+H${r}*$B$2`, result: Math.round(((g.pesos || 0) + (g.usd || 0) * (mes.dolar || 0)) * 100) / 100 }, g.nota || '', g.cat || null];
+      row.getCell(1).numFmt = 'dd/mm/yy';
+      row.getCell(7).numFmt = money; row.getCell(8).numFmt = usdFmt; row.getCell(9).numFmt = money;
+      if (g.de !== g.auto) for (let c = 1; c <= 9; c++) row.getCell(c).fill = chgFill;
+      row.getCell(6).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: ['"' + pers.map(p => p.nombre.replace(/[",]/g, ' ')).concat('No contar').join(',') + '"']
+      };
+    });
+    const tr = last + 2;
+    ws.getCell(`H${tr}`).value = 'TOTAL'; ws.getCell(`H${tr}`).font = { bold: true };
+    ws.getCell(`I${tr}`).value = { formula: `SUMIF(${rngF},"<>No contar",${rngI})`, result: Object.values(totals).reduce((a, b) => a + b, 0) };
+    ws.getCell(`I${tr}`).numFmt = money; ws.getCell(`I${tr}`).font = { bold: true };
+    [11, 40, 8, 12, 24, 14, 15, 10, 15, 40, 26].forEach((w, i) => ws.getColumn(i + 1).width = w);
+    ws.autoFilter = { from: 'A7', to: `K${last}` };
+    info[k] = { sheet: q(mesN(k)), rngF, rngI, rngD: `$D$${first}:$D$${last}`, rngK: `$K$${first}:$K$${last}`, totals, gs, mes };
+  }
+
+  // Resumen
+  res.getCell('A1').value = 'Gastos con tarjeta por persona y por mes';
+  res.getCell('A1').font = { bold: true, size: 14 };
+  res.getCell('A3').value = 'Persona'; style(res.getCell('A3'), head);
+  keys.forEach((k, i) => { const c = res.getCell(3, 2 + i); c.value = mesN(k); style(c, head); c.alignment = { horizontal: 'center' }; });
+  const totCol = 2 + keys.length;
+  style(res.getCell(3, totCol), head); res.getCell(3, totCol).value = 'Total';
+  const visibles = pers.filter(p => keys.some(k => info[k].totals[p.id]));
+  visibles.forEach((p, i) => {
+    const r = 4 + i;
+    res.getCell(r, 1).value = p.nombre + (p.id === st.principal ? ' (yo)' : '');
+    let sum = 0;
+    keys.forEach((k, j) => {
+      const inf = info[k], v = Math.round((inf.totals[p.id] || 0) * 100) / 100; sum += v;
+      const c = res.getCell(r, 2 + j);
+      c.value = { formula: `SUMIF(${inf.sheet}!${inf.rngF},"${p.nombre.replace(/"/g, '""')}",${inf.sheet}!${inf.rngI})`, result: v };
+      c.numFmt = money;
+    });
+    const ct = res.getCell(r, totCol);
+    ct.value = { formula: `SUM(${res.getCell(r, 2).address}:${res.getCell(r, totCol - 1).address})`, result: sum };
+    ct.numFmt = money; ct.font = { bold: true };
+    if (p.id === st.principal) for (let c = 1; c <= totCol; c++) { res.getCell(r, c).fill = meFill; res.getCell(r, c).font = { bold: true }; }
+  });
+  const rt = 4 + visibles.length;
+  res.getCell(rt, 1).value = 'Total'; res.getCell(rt, 1).font = { bold: true };
+  for (let c = 2; c <= totCol; c++) {
+    const a = res.getCell(4, c).address, b = res.getCell(rt - 1, c).address;
+    let v = 0; for (let r = 4; r < rt; r++) v += (res.getCell(r, c).value || {}).result || 0;
+    const cell = res.getCell(rt, c);
+    cell.value = { formula: `SUM(${a}:${b})`, result: v }; cell.numFmt = money; cell.font = { bold: true };
+    cell.border = { top: { style: 'thin' } };
+  }
+  // Per card rows
+  const cards = [...new Set(keys.flatMap(k => info[k].gs.map(g => g.tarjeta)))];
+  cards.forEach((t, i) => {
+    const r = rt + 2 + i;
+    res.getCell(r, 1).value = 'Total ' + t; res.getCell(r, 1).font = { italic: true };
+    keys.forEach((k, j) => {
+      const inf = info[k];
+      const v = inf.gs.filter(g => g.tarjeta === t && g.de !== NONE).reduce((a, g) => a + g.pesos + g.usd * (inf.mes.dolar || 0), 0);
+      const c = res.getCell(r, 2 + j);
+      c.value = { formula: `SUMIFS(${inf.sheet}!${inf.rngI},${inf.sheet}!${inf.rngD},"${t}",${inf.sheet}!${inf.rngF},"<>No contar")`, result: Math.round(v * 100) / 100 };
+      c.numFmt = money; c.font = { italic: true };
+    });
+  });
+  // Categorías: category x month, SUMIFS over the month sheets (only counted expenses)
+  catWs.getCell('A1').value = 'Gastos por categoría y por mes (todas las personas)';
+  catWs.getCell('A1').font = { bold: true, size: 14 };
+  catWs.getCell('A3').value = 'Categoría'; style(catWs.getCell('A3'), head);
+  keys.forEach((k, i) => { const c = catWs.getCell(3, 2 + i); c.value = mesN(k); style(c, head); c.alignment = { horizontal: 'center' }; });
+  const cTot = 2 + keys.length;
+  [['Total', cTot], ['Promedio/mes', cTot + 1]].forEach(([t, c]) => { catWs.getCell(3, c).value = t; style(catWs.getCell(3, c), head); });
+  const sumaCat = (inf, cat) => inf.gs.filter(g => g.de !== NONE && (g.cat || '') === cat).reduce((a, g) => a + g.pesos + g.usd * (inf.mes.dolar || 0), 0);
+  const listaCat = (st.categorias || []).concat(['']).filter(c => keys.some(k => sumaCat(info[k], c)));
+  listaCat.forEach((cat, i) => {
+    const r = 4 + i;
+    catWs.getCell(r, 1).value = cat || 'Sin categoría';
+    let sum = 0;
+    keys.forEach((k, j) => {
+      const inf = info[k], v = Math.round(sumaCat(inf, cat) * 100) / 100; sum += v;
+      const crit = cat ? `"${cat.replace(/"/g, '""')}"` : '"="';
+      const c = catWs.getCell(r, 2 + j);
+      c.value = { formula: `SUMIFS(${inf.sheet}!${inf.rngI},${inf.sheet}!${inf.rngK},${crit},${inf.sheet}!${inf.rngF},"<>No contar")`, result: v };
+      c.numFmt = money;
+    });
+    const a = catWs.getCell(r, 2).address, b = catWs.getCell(r, cTot - 1).address;
+    catWs.getCell(r, cTot).value = { formula: `SUM(${a}:${b})`, result: sum };
+    catWs.getCell(r, cTot + 1).value = { formula: `AVERAGE(${a}:${b})`, result: keys.length ? sum / keys.length : 0 };
+    catWs.getCell(r, cTot).numFmt = catWs.getCell(r, cTot + 1).numFmt = money;
+    catWs.getCell(r, cTot).font = { bold: true };
+  });
+  const crt = 4 + listaCat.length;
+  catWs.getCell(crt, 1).value = 'Total'; catWs.getCell(crt, 1).font = { bold: true };
+  for (let c = 2; c <= cTot + 1; c++) {
+    const a = catWs.getCell(4, c).address, b = catWs.getCell(crt - 1, c).address;
+    let v = 0; for (let r = 4; r < crt; r++) v += (catWs.getCell(r, c).value || {}).result || 0;
+    const cell = catWs.getCell(crt, c);
+    cell.value = { formula: `SUM(${a}:${b})`, result: v }; cell.numFmt = money; cell.font = { bold: true };
+    cell.border = { top: { style: 'thin' } };
+  }
+  catWs.getColumn(1).width = 34;
+  for (let c = 2; c <= cTot + 1; c++) catWs.getColumn(c).width = 16;
+
+  res.getColumn(1).width = 22;
+  for (let c = 2; c <= totCol; c++) res.getColumn(c).width = 16;
+  return wb;
+}
+if (typeof module !== 'undefined') module.exports = { buildWorkbook };
+
+
+// ===== INIT =====
+const fileIn = document.getElementById('file');
+fileIn.onchange = async () => { await importarArchivos([...fileIn.files]); fileIn.value = ''; };
+document.addEventListener('dragover', e => { e.preventDefault(); document.getElementById('drop')?.classList.add('over'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.getElementById('drop')?.classList.remove('over'); });
+document.addEventListener('drop', async e => {
+  e.preventDefault(); document.getElementById('drop')?.classList.remove('over');
+  const fs = [...e.dataTransfer.files].filter(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
+  if (fs.length) await importarArchivos(fs); else toast('Soltá archivos PDF.');
+});
+initDrive();
+render();
+renderArchivo();
+initArchivo();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizarDrive(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (ui.tab === 'stats') render(); });
+</script>
+</body>
+</html>
