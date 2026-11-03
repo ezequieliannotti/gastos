@@ -149,6 +149,44 @@ table.presu tr.queda td { font-weight: 700; font-size: 15px; border-top: 2px sol
 table.presu tr.addrow td { border-bottom: none; }
 table.presu .seclbl, table.presu tr.addrow button { position: sticky; left: 8px; }
 table.presu th .ghost { padding: 0 4px; font-size: 12px; }
+/* phone: lists instead of wide tables */
+.mnav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.mnav b { font-size: 17px; }
+.mnav button { font-size: 20px; padding: 2px 18px; }
+.lsec { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding: 16px 0 6px; border-bottom: 2px solid var(--border); }
+.lsec:first-child { padding-top: 0; }
+.lrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.lrow .lnom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lrow input.lval { width: 130px; text-align: right; font-size: 16px; font-variant-numeric: tabular-nums; }
+.lrow input.lval.esauto::placeholder { color: var(--accent); opacity: 1; font-style: italic; }
+.lrow input.lval.override { color: var(--warn); font-weight: 600; }
+.lrow.ltot { font-weight: 600; border-bottom: none; }
+.lrow.lqueda { font-weight: 700; font-size: 18px; border-top: 2px solid var(--text); border-bottom: none; margin-top: 10px; padding-top: 10px; }
+.ladd { margin: 6px 0 2px; }
+.mov { border-bottom: 1px solid var(--border); padding: 10px 0; }
+.mov.changed { background: var(--changed); margin: 0 -14px; padding: 10px 14px; }
+.mov.excl .mtop { opacity: .5; text-decoration: line-through; }
+.mtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.mdesc { font-weight: 500; word-break: break-word; }
+.mamt { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mmeta { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.msel { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+.msel select { flex: 1; min-width: 0; max-width: none; font-size: 14px; }
+.lcard { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+@media (max-width: 700px) {
+  .hero { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { padding: 12px; } .stat .val { font-size: 19px; } .stat .lbl { font-size: 11px; }
+  .people { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .person .amt { font-size: 17px; }
+  .drop { display: none; }
+  .card { padding: 14px; }
+  .card h2 .sub { display: block; margin: 2px 0 0; }
+  .toolbar select, .toolbar input[type=text] { flex: 1 1 140px; min-width: 0; }
+  .tablewrap th, .tablewrap td { padding: 6px 5px; font-size: 13px; }
+  .tablewrap td:first-child, .tablewrap th:first-child { white-space: normal; min-width: 70px; }
+  table.catt td:nth-last-child(2), table.catt th:nth-last-child(2) { display: none; }
+  table.comt td:last-child, table.comt th:last-child { display: none; }
+}
 @media (max-width: 640px) { .charts { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { header.top { flex-wrap: wrap; } header.top h1 { width: 100%; } header.top .sp { display: none; } }
 @media (max-width: 640px) { header.top, main { padding-left: 16px; padding-right: 16px; } nav.tabs { padding: 0 8px; } .sticky { position: static; } }
@@ -1143,22 +1181,32 @@ function renderResumen() {
     <div class="stat"><div class="lbl">Me tienen que pasar · ${mesNombre(ult)}</div><div class="val">${$0(aCobrar)}</div><div class="hint">${pendiente > 0.5 ? 'Falta cobrar ' + $0(pendiente) : 'Todo cobrado ✓'}</div></div>
   </div>`;
 
-  h += `<div class="card"><h2>Gastos por persona y por mes <span class="sub">Hacé clic en un monto para ver el detalle · ✓ = ya me lo pagó</span></h2><div class="tablewrap"><table>
-    <thead><tr><th>Persona</th>${meses.map(k => `<th class="n">${mesCorto(k)}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>`;
+  const celu = esCelu();
+  const mt = celu ? meses.slice(-3) : meses;
+  h += `<div class="card"><h2>Gastos por persona y por mes <span class="sub">${celu && meses.length > 3 ? 'Últimos 3 meses · ' : ''}Tocá un monto para ver el detalle · ✓ = ya me lo pagó</span></h2><div class="tablewrap"><table>
+    <thead><tr><th>Persona</th>${mt.map(k => `<th class="n">${mesCorto(k)}</th>`).join('')}${celu ? '' : '<th class="n">Total</th>'}</tr></thead><tbody>`;
   for (const p of visibles) {
-    const fila = meses.map(k => tot[k][p.id] || 0);
+    const fila = mt.map(k => tot[k][p.id] || 0);
     h += `<tr class="${p.id === yo ? 'me' : ''}"><td>${esc(p.nombre)}${p.id === yo ? ' (yo)' : ''}</td>` +
-      meses.map((k, i) => {
+      mt.map((k, i) => {
         const pg = p.id !== yo && fila[i] && (state.meses[k].pagado || {})[p.id];
         return `<td class="n clickable" onclick="irA('${k}','${p.id}')">${fila[i] ? $0(fila[i]) : '<span class="muted">—</span>'}${pg ? ' <span class="paid">✓</span>' : ''}</td>`;
       }).join('') +
-      `<td class="n">${$0(fila.reduce((a, b) => a + b, 0))}</td></tr>`;
+      (celu ? '' : `<td class="n">${$0(fila.reduce((a, b) => a + b, 0))}</td>`) + '</tr>';
   }
-  const colTot = meses.map(k => Object.values(tot[k]).reduce((a, b) => a + b, 0));
-  h += `<tr class="tot"><td>Total</td>${colTot.map(v => `<td class="n">${$0(v)}</td>`).join('')}<td class="n">${$0(colTot.reduce((a, b) => a + b, 0))}</td></tr>`;
+  const colTot = mt.map(k => Object.values(tot[k]).reduce((a, b) => a + b, 0));
+  h += `<tr class="tot"><td>Total</td>${colTot.map(v => `<td class="n">${$0(v)}</td>`).join('')}${celu ? '' : `<td class="n">${$0(colTot.reduce((a, b) => a + b, 0))}</td>`}</tr>`;
   h += `</tbody></table></div></div>`;
 
   // Per card control
+  if (celu) {
+    h += `<div class="card"><h2>Control por tarjeta</h2>`;
+    for (const k of meses.slice().reverse()) for (const [t, r] of Object.entries(state.meses[k].resumenes)) {
+      h += `<div class="lcard" onclick="irA('${k}')"><span><span class="tag ${t.toLowerCase()}">${t}</span> ${mesCorto(k)} · vence ${fechaObj(r.vencimiento)}</span>
+        <span>${$0(r.saldoPesos)}${r.saldoUSD ? ' + U$S ' + fmt0.format(r.saldoUSD) : ''} ${r.warnings && r.warnings.length ? '<span class="bad">⚠</span>' : '<span class="ok">✓</span>'}</span></div>`;
+    }
+    return h + '</div>';
+  }
   h += `<div class="card"><h2>Control por tarjeta <span class="sub">Lo que suma la página vs. el saldo del resumen</span></h2><div class="tablewrap"><table>
     <thead><tr><th>Mes</th><th>Tarjeta</th><th>Cierre</th><th>Vencimiento</th><th class="n">Saldo resumen $</th><th class="n">Saldo U$S</th><th class="n">Gastos del mes $</th><th class="n">Gastos U$S</th><th>Archivo</th></tr></thead><tbody>`;
   for (const k of meses.slice().reverse()) {
@@ -1233,8 +1281,8 @@ function renderMes(mk) {
       <input type="text" placeholder="Buscar comercio o nota…" value="${esc(ui.buscar)}" oninput="ui.buscar=this.value;clearTimeout(window._bt);window._bt=setTimeout(()=>{render();const i=document.querySelector('.toolbar input[type=text]');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)">
       <span class="sp"></span><span class="muted">${gs.length} movimientos · ${$(sumaVista)}${fp ? ' (parte de ' + esc(nombre(fp)) + ')' : ''}</span>
     </div>
-    <div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Descripción</th><th>Cuota</th><th>Tarjeta</th><th>Titular en el resumen</th><th>De quién</th><th>Categoría</th><th class="n">Pesos</th><th class="n">U$S</th><th class="n">Total $</th><th></th></tr></thead><tbody>`;
-  for (const g of gs) {
+    ${esCelu() ? `<div>${gs.map(g => movCelu(mk, g, mes, opts, catOpts, fp)).join('') || '<p class="muted" style="text-align:center">No hay movimientos con estos filtros.</p>'}</div></div>` : `<div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Descripción</th><th>Cuota</th><th>Tarjeta</th><th>Titular en el resumen</th><th>De quién</th><th>Categoría</th><th class="n">Pesos</th><th class="n">U$S</th><th class="n">Total $</th><th></th></tr></thead><tbody>`}`;
+  if (!esCelu()) for (const g of gs) {
     const changed = cambiado(g);
     const mem = changed && reglaKey(g.tarjeta, g) && mismaAsignacion(state.reglas[reglaKey(g.tarjeta, g)], asignacion(g));
     const reparto = g.de === DIVIDIDO ? `<div class="split" onclick="abrirDividir('${mk}','${g.id}')" title="Editar división">${partes(g).map(q => `<span class="${q.de === fp ? 'yo' : ''}">${esc(nombre(q.de))} ${$0(montoPesos(g, mes) * q.frac)}</span>`).join('')}</div>` : '';
@@ -1253,8 +1301,10 @@ function renderMes(mk) {
       <td class="n ${tot$ < 0 ? 'neg' : ''}"><b>${$(tot$)}</b></td>
       <td>${g.manual ? `<button class="small ghost danger" title="Borrar" onclick="borrarGasto('${mk}','${g.id}',true)">✕</button>` : ''}</td></tr>`;
   }
-  if (!gs.length) h += `<tr><td colspan="12" class="muted" style="text-align:center;padding:24px">No hay movimientos con estos filtros.</td></tr>`;
-  h += `</tbody></table></div></div>`;
+  if (!esCelu()) {
+    if (!gs.length) h += `<tr><td colspan="12" class="muted" style="text-align:center;padding:24px">No hay movimientos con estos filtros.</td></tr>`;
+    h += `</tbody></table></div></div>`;
+  }
 
   h += `<div class="card"><h2>Agregar gasto a mano <span class="sub">Ej: Netflix, algo pagado en efectivo, un ajuste</span></h2>
     <form id="man" class="toolbar" onsubmit="agregarManual('${mk}');return false">
@@ -1265,6 +1315,63 @@ function renderMes(mk) {
       <button class="primary" type="submit">Agregar</button>
     </form></div>`;
   return h;
+}
+// ===== CELULAR (narrow screens get lists instead of wide tables) =====
+const mqCelu = matchMedia('(max-width: 700px)');
+const esCelu = () => mqCelu.matches;
+// Ingresos y gastos on a phone: one month at a time.
+function renderPresuCelu() {
+  const hoy = new Date();
+  const kAct = mesKey(hoy.getFullYear(), hoy.getMonth() + 1);
+  const ult = mesesOrden().slice(-1)[0];
+  const k = ui.presuMes || (ult && ult > kAct ? ult : kAct);
+  ui.presuMes = k;
+  const [y, m] = k.split('-').map(Number);
+  const otro = d => { const x = new Date(y, m - 1 + d, 1); return mesKey(x.getFullYear(), x.getMonth() + 1); };
+  const t = totalesPresu(k);
+  const signo = v => `<span class="${v < 0 ? 'bad' : 'ok'}">${v < 0 ? '−' : ''}$ ${fmt0.format(Math.abs(Math.round(v)))}</span>`;
+  let h = `<div class="mnav"><button onclick="ui.presuMes='${otro(-1)}';render()" aria-label="Mes anterior">‹</button>
+      <b>${mesNombre(k)}</b><button onclick="ui.presuMes='${otro(1)}';render()" aria-label="Mes siguiente">›</button></div>
+    <div class="hero">
+      <div class="stat"><div class="lbl">Ingresos</div><div class="val">${$0(t.ingreso)}</div></div>
+      <div class="stat"><div class="lbl">Gastos</div><div class="val">${$0(t.gasto)}</div><div class="hint">${t.ingreso ? (t.gasto / t.ingreso * 100).toFixed(0) + '% de los ingresos' : ''}</div></div>
+      <div class="stat"><div class="lbl">Ahorro</div><div class="val">${$0(t.ahorro)}</div></div>
+      <div class="stat ${t.queda >= 0 ? 'me' : ''}"><div class="lbl">Me queda</div><div class="val">${signo(t.queda)}</div></div>
+    </div>
+    <div class="card">`;
+  for (const [tipo, titulo, mas] of SECCIONES) {
+    h += `<div class="lsec">${titulo}</div>`;
+    for (const f of state.presu.filas.filter(x => x.tipo === tipo)) {
+      const man = valorManual(k, f.id), au = f.auto ? autoTarjeta(k, f.auto) : null;
+      h += `<div class="lrow"><span class="lnom">${esc(f.nombre)}${f.auto ? ' <span class="tag mem">auto</span>' : ''}</span>
+        <input type="text" inputmode="decimal" class="lval ${f.auto && man === null && au !== null ? 'esauto' : ''} ${f.auto && man !== null ? 'override' : ''}" data-focus="p|${k}|${f.id}"
+          value="${man !== null ? fmtCelda(Math.round(man)) : ''}" data-exact="${man !== null && man !== Math.round(man) ? fmtCelda(man) : ''}" placeholder="${au !== null ? fmtCelda(Math.round(au)) : ''}"
+          onchange="setPresu('${k}','${f.id}',this.value)" onfocus="if(this.dataset.exact)this.value=this.dataset.exact"></div>`;
+    }
+    h += `<div class="ladd"><button class="small ghost" onclick="agregarFila('${tipo}')">${mas}</button></div>
+      <div class="lrow ltot"><span>Total ${titulo.toLowerCase()}</span><span>${$0(t[tipo])}</span></div>`;
+  }
+  h += `<div class="lrow lqueda"><span>Me queda</span>${signo(t.queda)}</div>
+    <div class="toolbar" style="margin:14px 0 0"><button onclick="copiarMesAnterior('${k}')">⇠ Copiar lo que falte de ${mesNombre(otro(-1))}</button></div>
+    <p class="muted" style="font-size:12.5px;margin:10px 0 0">Las tarjetas (en azul) se completan solas con tu parte del resumen; si escribís un valor, se usa el tuyo. Para renombrar, ordenar o borrar filas usá la compu.</p></div>
+  <div class="card"><h2>Ingresos vs. egresos <span class="sub">últimos meses · egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>`;
+  return h;
+}
+// Movements of a month as cards.
+function movCelu(mk, g, mes, opts, catOpts, fp) {
+  const changed = cambiado(g);
+  const tot$ = montoPesos(g, mes);
+  const reparto = g.de === DIVIDIDO ? `<div class="split" onclick="abrirDividir('${mk}','${g.id}')">${partes(g).map(q => `<span class="${q.de === fp ? 'yo' : ''}">${esc(nombre(q.de))} ${$0(tot$ * q.frac)}</span>`).join('')}</div>` : '';
+  const titular = g.titular === 'IMPUESTOS' ? 'Impuestos' : g.titular ? g.titular.split(/\s+/)[0].replace(/\b\w+/g, w => w[0] + w.slice(1).toLowerCase()) : '';
+  return `<div class="mov ${changed ? 'changed' : ''} ${g.de === NO_CONTAR ? 'excl' : ''}">
+    <div class="mtop"><span class="mdesc">${esc(g.desc)}</span><b class="mamt ${tot$ < 0 ? 'neg' : ''}">${$(tot$)}</b></div>
+    <div class="mmeta">${fechaCorta(g.fecha)}${g.cuota ? ' · cuota ' + g.cuota : ''} · <span class="tag ${g.tarjeta.toLowerCase()}">${nombreTarjeta(g.tarjeta)}</span>${titular ? ' · ' + esc(titular) : ''}${g.usd ? ' · U$S ' + fmt.format(g.usd) : ''}</div>
+    ${g.nota ? `<div class="nota" onclick="abrirDividir('${mk}','${g.id}')">📝 ${esc(g.nota)}</div>` : ''}
+    <div class="msel"><select class="who" onchange="cambiarDe('${mk}','${g.id}',this.value)">${opts(g.de)}</select>
+      <select class="cat ${g.cat ? '' : 'sincat'}" onchange="setCategoria('${mk}','${g.id}',this.value)">${catOpts(g.cat)}</select>
+      <button class="small ghost pencil" title="Editar" onclick="abrirDividir('${mk}','${g.id}')">✏️</button>
+      ${g.manual ? `<button class="small ghost danger" title="Borrar" onclick="borrarGasto('${mk}','${g.id}',true)">✕</button>` : ''}</div>
+    ${reparto}</div>`;
 }
 // ===== ESTADÍSTICAS =====
 let charts = [];
@@ -1353,19 +1460,19 @@ function renderStats() {
     <div class="card"><h2>Total por categoría <span class="sub">${mesNombre(ms[0])}${ms.length > 1 ? ' a ' + mesNombre(ms[ms.length - 1]) : ''}</span></h2><div class="chartbox tall"><canvas id="chCat"></canvas></div></div>
     <div class="card"><h2>Categorías mes a mes <span class="sub">apilado · las 7 principales</span></h2><div class="chartbox tall"><canvas id="chCatMes"></canvas></div></div>
   </div>
-  <div class="card"><h2>Resumen por categoría <span class="sub">mes a mes, total y promedio del período</span></h2><div class="tablewrap"><table>
-    <thead><tr><th>Categoría</th>${ms.map(k => `<th class="n">${mesCorto(k)}</th>`).join('')}<th class="n">Total</th><th class="n">Promedio/mes</th><th class="n">%</th></tr></thead><tbody>
-    ${cats.map(c => `<tr><td>${c ? esc(c) : '<span class="muted">Sin categoría</span>'}</td>${ms.map(k => `<td class="n">${ct[c].meses[k] ? $0(ct[c].meses[k]) : '<span class="muted">—</span>'}</td>`).join('')}
+  <div class="card"><h2>Resumen por categoría <span class="sub">mes a mes, total y promedio del período</span></h2><div class="tablewrap"><table class="catt">
+    <thead><tr><th>Categoría</th>${(esCelu() ? [] : ms).map(k => `<th class="n">${mesCorto(k)}</th>`).join('')}<th class="n">Total</th><th class="n">Promedio/mes</th><th class="n">%</th></tr></thead><tbody>
+    ${cats.map(c => `<tr><td>${c ? esc(c) : '<span class="muted">Sin categoría</span>'}</td>${(esCelu() ? [] : ms).map(k => `<td class="n">${ct[c].meses[k] ? $0(ct[c].meses[k]) : '<span class="muted">—</span>'}</td>`).join('')}
       <td class="n"><b>${$0(ct[c].total)}</b></td><td class="n">${$0(ct[c].total / ms.length)}</td><td class="n">${totCat ? (ct[c].total / totCat * 100).toFixed(1) + '%' : ''}</td></tr>`).join('')}
-    <tr class="tot"><td>Total</td>${ms.map(k => `<td class="n">${$0(cats.reduce((a, c) => a + (ct[c].meses[k] || 0), 0))}</td>`).join('')}<td class="n">${$0(totCat)}</td><td class="n">${$0(totCat / ms.length)}</td><td class="n">100%</td></tr>
+    <tr class="tot"><td>Total</td>${(esCelu() ? [] : ms).map(k => `<td class="n">${$0(cats.reduce((a, c) => a + (ct[c].meses[k] || 0), 0))}</td>`).join('')}<td class="n">${$0(totCat)}</td><td class="n">${$0(totCat / ms.length)}</td><td class="n">100%</td></tr>
     </tbody></table></div>
     ${ct[''] ? `<p class="muted" style="margin:10px 0 0;font-size:12.5px">Hay gastos sin categoría por ${$0(ct[''].total)}. Asignalos en la pestaña de cada mes (filtro "Sin categoría").</p>` : ''}</div>`;
 
   // Table view of the comercios (accessibility + exact numbers)
   const top = topComercios(ms, pid, 25);
-  h += `<div class="card"><h2>Comercios · ${esc(quien)} <span class="sub">${mesNombre(ms[0])}${ms.length > 1 ? ' a ' + mesNombre(ms[ms.length - 1]) : ''}</span></h2><div class="tablewrap"><table>
+  h += `<div class="card"><h2>Comercios · ${esc(quien)} <span class="sub">${mesNombre(ms[0])}${ms.length > 1 ? ' a ' + mesNombre(ms[ms.length - 1]) : ''}</span></h2><div class="tablewrap"><table class="comt">
     <thead><tr><th>Comercio</th><th class="n">Compras</th><th class="n">Total $</th><th class="n">% del total</th></tr></thead><tbody>
-    ${top.lista.map(c => `<tr><td>${esc(c.nombre)}</td><td class="n">${c.n}</td><td class="n">${$(c.total)}</td><td class="n">${top.total ? (c.total / top.total * 100).toFixed(1) + '%' : ''}</td></tr>`).join('')}
+    ${top.lista.map(c => `<tr><td>${esc(c.nombre)}</td><td class="n">${c.n}</td><td class="n">${esCelu() ? $0(c.total) : $(c.total)}</td><td class="n">${top.total ? (c.total / top.total * 100).toFixed(1) + '%' : ''}</td></tr>`).join('')}
     </tbody></table></div></div>`;
   return h;
 }
@@ -1695,6 +1802,7 @@ function mesesPresu() {
   return Array.from({ length: 8 }, (_, i) => { const d = new Date(fy, fm - 8 + i, 1); return mesKey(d.getFullYear(), d.getMonth() + 1); });
 }
 function renderPresu() {
+  if (esCelu()) return renderPresuCelu();
   const anios = aniosPresu();
   const hoy = new Date();
   if (ui.presuVista && ui.presuVista !== 'ult8' && !anios.includes(+ui.presuVista)) ui.presuVista = 'ult8';
@@ -2187,6 +2295,7 @@ initDrive();
 render();
 renderArchivo();
 initArchivo();
+mqCelu.addEventListener('change', () => render());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizarDrive(); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (ui.tab === 'stats') render(); });
 </script>
