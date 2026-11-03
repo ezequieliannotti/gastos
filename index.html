@@ -1075,13 +1075,17 @@ function borrarGasto(mk, id, preguntar) {
 }
 function agregarManual(mk) {
   const f = document.getElementById('man');
-  const desc = f.desc.value.trim(); const monto = parseFloat(f.monto.value.replace(/\./g, '').replace(',', '.'));
-  if (!desc || !isFinite(monto)) { toast('Completá descripción y monto.'); return; }
+  const desc = f.desc.value.trim(); const monto = parsePlata(f.monto.value);
+  if (!desc) { toast('Poné una descripción.'); f.desc.focus(); return; }
+  if (monto === null || !isFinite(monto)) { toast('No entendí el monto. Escribilo como 15.000 o 15000,50.'); f.monto.focus(); return; }
+  ui.manFecha = f.fecha.value; ui.manDe = f.de.value;
   state.meses[mk].gastos.push({
     id: uid(), tarjeta: 'Manual', fecha: f.fecha.value || (mk + '-01'), desc, cuota: '', cupon: '',
     titular: '', seccion: 'manual', pesos: monto, usd: 0, auto: f.de.value, de: f.de.value, manual: true
   });
   save(); render();
+  toast(`✓ Agregado: ${desc} ${$(monto)}`);
+  document.querySelector('#man [name=desc]')?.focus();
 }
 function textoPersona(mk, pid) {
   const mes = state.meses[mk];
@@ -1308,10 +1312,10 @@ function renderMes(mk) {
 
   h += `<div class="card"><h2>Agregar gasto a mano <span class="sub">Ej: Netflix, algo pagado en efectivo, un ajuste</span></h2>
     <form id="man" class="toolbar" onsubmit="agregarManual('${mk}');return false">
-      <input type="date" name="fecha" value="${mk}-01">
-      <input type="text" name="desc" placeholder="Descripción" style="flex:1;min-width:180px">
-      <input type="text" name="monto" placeholder="Monto $" style="width:120px">
-      <select name="de">${personasOrden().map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('')}</select>
+      <input type="date" name="fecha" value="${ui.manFecha && ui.manFecha.startsWith(mk) ? ui.manFecha : mk + '-01'}">
+      <input type="text" name="desc" placeholder="Descripción" enterkeyhint="next" style="flex:1;min-width:180px">
+      <input type="text" name="monto" placeholder="Monto $" inputmode="decimal" enterkeyhint="done" style="width:120px">
+      <select name="de">${personasOrden().map(p => `<option value="${p.id}" ${p.id === ui.manDe ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>
       <button class="primary" type="submit">Agregar</button>
     </form></div>`;
   return h;
@@ -1346,7 +1350,7 @@ function renderPresuCelu() {
       h += `<div class="lrow"><span class="lnom">${esc(f.nombre)}${f.auto ? ' <span class="tag mem">auto</span>' : ''}</span>
         <input type="text" inputmode="decimal" class="lval ${f.auto && man === null && au !== null ? 'esauto' : ''} ${f.auto && man !== null ? 'override' : ''}" data-focus="p|${k}|${f.id}"
           value="${man !== null ? fmtCelda(Math.round(man)) : ''}" data-exact="${man !== null && man !== Math.round(man) ? fmtCelda(man) : ''}" placeholder="${au !== null ? fmtCelda(Math.round(au)) : ''}"
-          onchange="setPresu('${k}','${f.id}',this.value)" onfocus="if(this.dataset.exact)this.value=this.dataset.exact"></div>`;
+          enterkeyhint="next" oninput="tipeoPresu(this,'${k}','${f.id}')" onchange="setPresu('${k}','${f.id}',this.value)" onfocus="if(this.dataset.exact)this.value=this.dataset.exact"></div>`;
     }
     h += `<div class="ladd"><button class="small ghost" onclick="agregarFila('${tipo}')">${mas}</button></div>
       <div class="lrow ltot"><span>Total ${titulo.toLowerCase()}</span><span>${$0(t[tipo])}</span></div>`;
@@ -1750,6 +1754,49 @@ function setPresu(k, id, txt) {
   // render after the focus moved to the next cell, so it can be restored
   setTimeout(() => { save(); render(); }, 0);
 }
+// Typing in a cell saves right away (without redrawing), so nothing is lost if the page redraws,
+// the phone switches apps or the keyboard is closed before the cell loses focus.
+function tipeoPresu(el, k, id) {
+  const n = parsePlata(el.value);
+  if (Number.isNaN(n)) return;
+  state.presu.valores[k] = state.presu.valores[k] || {};
+  if (n === null) delete state.presu.valores[k][id]; else state.presu.valores[k][id] = n;
+  el.dataset.exact = '';
+  save();
+}
+// Enter works like moving to the next field: in a budget cell, the one below (same month);
+// in the manual-expense form, the next field, adding the expense when everything is filled in;
+// in a dialog, the next field.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.isComposing || e.shiftKey) return;
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || !['text', 'number', 'date', ''].includes(el.type)) return;
+  const fk = el.dataset.focus || '';
+  if (fk.startsWith('p|')) {
+    e.preventDefault();
+    const pref = fk.split('|').slice(0, 2).join('|') + '|';
+    const celdas = [...document.querySelectorAll(`input[data-focus^="${pref}"]`)];
+    const sig = celdas[celdas.indexOf(el) + 1];
+    if (sig) sig.focus(); else el.blur();
+    return;
+  }
+  const form = el.closest('#man');
+  if (form) {
+    e.preventDefault();
+    const campos = [...form.querySelectorAll('input')];
+    const vacio = campos.find(c => !c.value.trim() && c !== el);
+    if (!el.value.trim()) return;
+    if (vacio) vacio.focus(); else form.requestSubmit();
+    return;
+  }
+  const modal = el.closest('.modal');
+  if (modal) {
+    e.preventDefault();
+    const campos = [...modal.querySelectorAll('input[type=text], input[type=number], input[type=date], textarea')].filter(c => !c.disabled && c.offsetParent);
+    const sig = campos[campos.indexOf(el) + 1];
+    if (sig) { sig.focus(); if (sig.select) sig.select(); } else el.blur();
+  }
+});
 function aniosPresu() {
   const ys = new Set([new Date().getFullYear()]);
   Object.keys(state.meses).concat(Object.keys(state.presu.valores)).forEach(k => ys.add(+k.slice(0, 4)));
@@ -1850,7 +1897,7 @@ function renderPresu() {
           const ph = au !== null ? fmtCelda(Math.round(au)) : '';
           return `<td class="n"><input type="text" class="celda ${f.auto && man === null && au !== null ? 'esauto' : ''} ${f.auto && man !== null ? 'override' : ''}" data-focus="p|${k}|${f.id}"
             value="${man !== null ? fmtCelda(Math.round(man)) : ''}" data-exact="${man !== null && man !== Math.round(man) ? fmtCelda(man) : ''}" placeholder="${ph}" title="${au !== null ? 'Automático: ' + $(au) + (man !== null ? ' · borrá el valor para volver al automático' : '') : ''}"
-            onchange="setPresu('${k}','${f.id}',this.value)" onfocus="if(this.dataset.exact)this.value=this.dataset.exact;this.select()"></td>`;
+            oninput="tipeoPresu(this,'${k}','${f.id}')" onchange="setPresu('${k}','${f.id}',this.value)" onfocus="if(this.dataset.exact)this.value=this.dataset.exact;this.select()"></td>`;
         }).join('') +
         `<td class="n"><b>${$0(vals.reduce((a, b) => a + b, 0))}</b></td><td class="n muted">${$0(prom(vals))}</td></tr>`;
     }
