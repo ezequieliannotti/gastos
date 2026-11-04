@@ -98,7 +98,7 @@ select.sincat { color: var(--muted); border-style: dashed; }
 .person .nm { font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .person .amt { font-size: 20px; font-weight: 650; margin-top: 2px; }
 .person .portj { margin-top: 6px; display: grid; gap: 3px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.person .portj > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.person .portj > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; white-space: nowrap; }
 .person .row { display: flex; gap: 6px; margin-top: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
 .person label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
 .paid { color: var(--me); font-weight: 600; }
@@ -179,8 +179,10 @@ table.presu th .ghost { padding: 0 4px; font-size: 12px; }
 @media (max-width: 700px) {
   .hero { grid-template-columns: 1fr 1fr; gap: 10px; }
   .stat { padding: 12px; } .stat .val { font-size: 19px; } .stat .lbl { font-size: 11px; }
-  .people { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .people { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .person .amt { font-size: 17px; }
+  .person .portj input[type=checkbox] { width: 18px; height: 18px; }
+  .person .portj > div { min-height: 28px; }
   .drop { display: none; }
   .card { padding: 14px; }
   .card h2 .sub { display: block; margin: 2px 0 0; }
@@ -1035,10 +1037,26 @@ function setDolar(mk, v) {
   if (!isFinite(n)) return;
   state.meses[mk].dolar = n; state.dolar = n; save(); render();
 }
-function togglePagado(mk, pid, ev) {
-  ev.stopPropagation();
+// mes.pagado[pid] is {Visa: true, ...}, one mark per card (true = old data: everything paid).
+function pagadoTarjeta(mes, pid, t) {
+  const v = (mes.pagado || {})[pid];
+  return v === true || !!(v && v[t]);
+}
+function estadoPago(mes, pid, porT) {
+  const ts = Object.keys(porT[pid] || {}).filter(t => Math.abs(porT[pid][t]) >= 0.005);
+  const hechas = ts.filter(t => pagadoTarjeta(mes, pid, t));
+  return {
+    falta: ts.filter(t => !hechas.includes(t)).reduce((a, t) => a + porT[pid][t], 0),
+    todo: ts.length > 0 && hechas.length === ts.length,
+    parte: hechas.length > 0 && hechas.length < ts.length
+  };
+}
+function togglePagado(mk, pid, t) {
   const mes = state.meses[mk]; mes.pagado = mes.pagado || {};
-  mes.pagado[pid] = !mes.pagado[pid]; save(); render();
+  if (mes.pagado[pid] === true) mes.pagado[pid] = Object.fromEntries(Object.keys(totalesPorTarjeta(mes)[pid] || {}).map(x => [x, true]));
+  const v = mes.pagado[pid] = mes.pagado[pid] || {};
+  v[t] = !v[t];
+  save(); render();
 }
 function borrarResumen(mk, tarjeta) {
   if (!confirm(`¿Borrar el resumen ${tarjeta} de ${mesNombre(mk)} y sus gastos?`)) return;
@@ -1055,6 +1073,7 @@ function cambiarTarjeta(mk, de) {
   if (mes.resumenes[a]) { alert(`${mesNombre(mk)} ya tiene un resumen ${a}. Borrá uno de los dos primero.`); return; }
   if (!confirm(`¿Este resumen es de ${a}? Lo paso de ${de} a ${a} (se mantienen tus cambios).`)) return;
   mes.resumenes[a] = mes.resumenes[de]; delete mes.resumenes[de];
+  for (const v of Object.values(mes.pagado || {})) if (v && typeof v === 'object' && de in v) { v[a] = v[de]; delete v[de]; }
   state.notas = state.notas || {};
   let n = 0;
   for (const g of mes.gastos) {
@@ -1176,8 +1195,8 @@ function renderResumen() {
   const mioPrev = prev ? (tot[prev][yo] || 0) : null;
   const totalUlt = Object.values(tot[ult]).reduce((a, b) => a + b, 0);
   const aCobrar = totalUlt - mioUlt;
-  const pagadoUlt = state.meses[ult].pagado || {};
-  const pendiente = pers.filter(p => p.id !== yo && !pagadoUlt[p.id]).reduce((a, p) => a + (tot[ult][p.id] || 0), 0);
+  const porMes = Object.fromEntries(meses.map(k => [k, totalesPorTarjeta(state.meses[k])]));
+  const pendiente = pers.filter(p => p.id !== yo).reduce((a, p) => a + estadoPago(state.meses[ult], p.id, porMes[ult]).falta, 0);
   let delta = '';
   if (mioPrev !== null && mioPrev > 0) {
     const d = (mioUlt - mioPrev) / mioPrev * 100;
@@ -1193,14 +1212,14 @@ function renderResumen() {
 
   const celu = esCelu();
   const mt = celu ? meses.slice(-3) : meses;
-  h += `<div class="card"><h2>Gastos por persona y por mes <span class="sub">${celu && meses.length > 3 ? 'Últimos 3 meses · ' : ''}Tocá un monto para ver el detalle · ✓ = ya me lo pagó</span></h2><div class="tablewrap"><table>
+  h += `<div class="card"><h2>Gastos por persona y por mes <span class="sub">${celu && meses.length > 3 ? 'Últimos 3 meses · ' : ''}Tocá un monto para ver el detalle · ✓ = ya me lo pagó · ◐ = me pagó una tarjeta</span></h2><div class="tablewrap"><table>
     <thead><tr><th>Persona</th>${mt.map(k => `<th class="n">${mesCorto(k)}</th>`).join('')}${celu ? '' : '<th class="n">Total</th>'}</tr></thead><tbody>`;
   for (const p of visibles) {
     const fila = mt.map(k => tot[k][p.id] || 0);
     h += `<tr class="${p.id === yo ? 'me' : ''}"><td>${esc(p.nombre)}${p.id === yo ? ' (yo)' : ''}</td>` +
       mt.map((k, i) => {
-        const pg = p.id !== yo && fila[i] && (state.meses[k].pagado || {})[p.id];
-        return `<td class="n clickable" onclick="irA('${k}','${p.id}')">${fila[i] ? $0(fila[i]) : '<span class="muted">—</span>'}${pg ? ' <span class="paid">✓</span>' : ''}</td>`;
+        const pg = p.id !== yo && fila[i] ? estadoPago(state.meses[k], p.id, porMes[k]) : {};
+        return `<td class="n clickable" onclick="irA('${k}','${p.id}')">${fila[i] ? $0(fila[i]) : '<span class="muted">—</span>'}${pg.todo ? ' <span class="paid">✓</span>' : pg.parte ? ' <span class="paid">◐</span>' : ''}</td>`;
       }).join('') +
       (celu ? '' : `<td class="n">${$0(fila.reduce((a, b) => a + b, 0))}</td>`) + '</tr>';
   }
@@ -1240,7 +1259,6 @@ function renderMes(mk) {
   const pers = personasOrden().filter(p => tot[p.id] || mes.gastos.some(g => esDe(g, p.id)));
   const maxT = Math.max(1, ...Object.values(tot));
   const porT = totalesPorTarjeta(mes);
-  const pagado = mes.pagado || {};
   let h = `<div class="info">`;
   for (const [t, r] of Object.entries(mes.resumenes)) {
     h += `<div class="chip"><span class="tag ${t.toLowerCase()}">${t}</span> cierre ${fechaObj(r.cierre)} · vence <b>${fechaObj(r.vencimiento)}</b> · saldo <b>${$(r.saldoPesos)}</b>${r.saldoUSD ? ' + U$S ' + fmt.format(r.saldoUSD) : ''}
@@ -1257,9 +1275,13 @@ function renderMes(mk) {
       <div class="nm"><span>${esc(p.nombre)}${p.id === yo ? ' (yo)' : ''}</span>
         <button class="small ghost" title="Copiar detalle para mandar" onclick="copiarPersona('${mk}','${p.id}',event)">📋</button></div>
       <div class="amt">${$(v)}</div>
-      <div class="portj">${ordenTarjetas(Object.keys(porT[p.id] || {})).filter(t => Math.abs(porT[p.id][t]) >= 0.005).map(t => `<div><span class="tag ${t.toLowerCase()}">${nombreTarjeta(t)}</span><span>${$(porT[p.id][t])}</span></div>`).join('')}</div>
+      <div class="portj">${ordenTarjetas(Object.keys(porT[p.id] || {})).filter(t => Math.abs(porT[p.id][t]) >= 0.005).map(t => {
+        const hecho = p.id !== yo && pagadoTarjeta(mes, p.id, t);
+        const tag = `<span class="tag ${t.toLowerCase()}">${nombreTarjeta(t)}</span>`;
+        return `<div>${p.id === yo ? tag : `<label title="Marcar ${nombreTarjeta(t)} como pagada" onclick="event.stopPropagation()"><input type="checkbox" ${hecho ? 'checked' : ''} aria-label="${esc(p.nombre)} pagó ${nombreTarjeta(t)}" onchange="togglePagado('${mk}','${p.id}','${t}')">${tag}</label>`}<span class="${hecho ? 'paid' : ''}">${$(porT[p.id][t])}</span></div>`;
+      }).join('')}</div>
       <div class="bar"><i style="width:${(v / maxT * 100).toFixed(1)}%"></i></div>
-      ${p.id === yo ? '<div class="row">Mis gastos</div>' : `<div class="row"><label onclick="togglePagado('${mk}','${p.id}',event)"><input type="checkbox" ${pagado[p.id] ? 'checked' : ''} style="pointer-events:none"> ${pagado[p.id] ? '<span class="paid">Pagado</span>' : 'Pagado'}</label></div>`}
+      ${p.id === yo ? '<div class="row">Mis gastos</div>' : (e => `<div class="row">${e.todo ? '<span class="paid">✓ Todo pagado</span>' : e.parte ? 'Falta ' + $0(e.falta) : 'Sin pagar'}</div>`)(estadoPago(mes, p.id, porT))}
     </div>`;
   }
   h += `</div>`;
