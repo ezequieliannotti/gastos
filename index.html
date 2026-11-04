@@ -142,6 +142,9 @@ table.presu .concepto { position: sticky; left: 0; background: var(--surface); z
 table.presu .fila { display: flex; align-items: center; }
 table.presu .fila .ghost { opacity: .35; padding: 2px 5px; }
 table.presu tr:hover .fila .ghost { opacity: 1; }
+select.catfila { display: block; font-size: 11.5px; padding: 1px 4px; margin-top: 2px; max-width: 100%; }
+table.presu select.catfila { width: 150px; margin-left: 8px; }
+.lnom select.catfila { font-size: 14px; margin-top: 4px; }
 table.presu tr.sec td { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding-top: 16px; border-bottom: 2px solid var(--border); }
 table.presu tr.sub td { font-weight: 600; background: var(--surface-2); }
 table.presu tr.sub td:first-child, table.presu tr.queda td:first-child { position: sticky; left: 0; z-index: 1; }
@@ -1266,9 +1269,7 @@ function renderMes(mk) {
   if (ui.filtroPersona) gs = gs.filter(g => esDe(g, ui.filtroPersona));
   if (ui.filtroTarjeta) gs = gs.filter(g => g.tarjeta === ui.filtroTarjeta);
   if (ui.filtroCat) gs = gs.filter(g => ui.filtroCat === '_sin' ? !g.cat : g.cat === ui.filtroCat);
-  const catOpts = sel => `<option value="" ${!sel ? 'selected' : ''}>— Sin categoría</option>` +
-    state.categorias.map(c => `<option value="${esc(c)}" ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('') +
-    `<option value="_nueva">+ Nueva categoría…</option>`;
+  const catOpts = opcionesCat;
   const nSinCat = mes.gastos.filter(g => !g.cat && partes(g).length).length;
   if (ui.buscar) { const q = ui.buscar.toLowerCase(); gs = gs.filter(g => (g.desc + ' ' + g.titular + ' ' + (g.nota || '')).toLowerCase().includes(q)); }
   const orden = { consumos: 0, manual: 1, impuestos: 2 };
@@ -1350,7 +1351,7 @@ function renderPresuCelu() {
     h += `<div class="lsec">${titulo}</div>`;
     for (const f of state.presu.filas.filter(x => x.tipo === tipo)) {
       const man = valorManual(k, f.id), au = f.auto ? autoTarjeta(k, f.auto) : null;
-      h += `<div class="lrow"><span class="lnom">${esc(f.nombre)}${f.auto ? ' <span class="tag mem">auto</span>' : ''}</span>
+      h += `<div class="lrow"><div class="lnom">${esc(f.nombre)}${f.auto ? ' <span class="tag mem">auto</span>' : ''}${selectCatFila(f)}</div>
         <input type="text" inputmode="decimal" class="lval ${f.auto && man === null && au !== null ? 'esauto' : ''} ${f.auto && man !== null ? 'override' : ''}" data-focus="p|${k}|${f.id}"
           value="${man !== null ? fmtCelda(Math.round(man)) : ''}" data-exact="${man !== null && man !== Math.round(man) ? fmtCelda(man) : ''}" placeholder="${au !== null ? fmtCelda(Math.round(au)) : ''}"
           enterkeyhint="next" oninput="tipeoPresu(this,'${k}','${f.id}')" onchange="setPresu('${k}','${f.id}',this.value)" onfocus="if(this.dataset.exact)this.value=this.dataset.exact"></div>`;
@@ -1360,8 +1361,9 @@ function renderPresuCelu() {
   }
   h += `<div class="lrow lqueda"><span>Me queda</span>${signo(t.queda)}</div>
     <div class="toolbar" style="margin:14px 0 0"><button onclick="copiarMesAnterior('${k}')">⇠ Copiar lo que falte de ${mesNombre(otro(-1))}</button></div>
-    <p class="muted" style="font-size:12.5px;margin:10px 0 0">Las tarjetas (en azul) se completan solas con tu parte del resumen; si escribís un valor, se usa el tuyo. Para renombrar, ordenar o borrar filas usá la compu.</p></div>
-  <div class="card"><h2>Ingresos vs. egresos <span class="sub">últimos meses · egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>`;
+    <p class="muted" style="font-size:12.5px;margin:10px 0 0">Las tarjetas (en azul) se completan solas con tu parte del resumen; si escribís un valor, se usa el tuyo. Elegí una categoría en tus gastos para verlos en Estadísticas. Para renombrar, ordenar o borrar filas usá la compu.</p></div>
+  <div class="card"><h2>Ingresos vs. egresos <span class="sub">últimos meses · egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
+  ${cardsAhorro()}`;
   return h;
 }
 // Movements of a month as cards.
@@ -1473,6 +1475,7 @@ function renderStats() {
       <td class="n"><b>${$0(ct[c].total)}</b></td><td class="n">${$0(ct[c].total / ms.length)}</td><td class="n">${totCat ? (ct[c].total / totCat * 100).toFixed(1) + '%' : ''}</td></tr>`).join('')}
     <tr class="tot"><td>Total</td>${(esCelu() ? [] : ms).map(k => `<td class="n">${$0(cats.reduce((a, c) => a + (ct[c].meses[k] || 0), 0))}</td>`).join('')}<td class="n">${$0(totCat)}</td><td class="n">${$0(totCat / ms.length)}</td><td class="n">100%</td></tr>
     </tbody></table></div>
+    ${(pid === '_all' || pid === state.principal) && ms.some(k => gastosFuera(k).length) ? `<p class="muted" style="margin:10px 0 0;font-size:12.5px">Incluye los gastos con categoría que cargaste en Ingresos y gastos.</p>` : ''}
     ${ct[''] ? `<p class="muted" style="margin:10px 0 0;font-size:12.5px">Hay gastos sin categoría por ${$0(ct[''].total)}. Asignalos en la pestaña de cada mes (filtro "Sin categoría").</p>` : ''}</div>`;
 
   // Table view of the comercios (accessibility + exact numbers)
@@ -1486,16 +1489,19 @@ function renderStats() {
 // {cat: {total, meses: {k: monto}}} for one person's share ('_all' = everybody)
 function catTotales(ms, pid) {
   const out = {};
+  const sumar = (k, c, v) => {
+    out[c] = out[c] || { total: 0, meses: {} };
+    out[c].total += v; out[c].meses[k] = (out[c].meses[k] || 0) + v;
+  };
   for (const k of ms) {
     const mes = state.meses[k];
     for (const g of mes.gastos) {
       if (!partes(g).length) continue;
       const f = pid === '_all' ? 1 : fracDe(g, pid);
       if (!f) continue;
-      const c = g.cat || '', v = montoPesos(g, mes) * f;
-      out[c] = out[c] || { total: 0, meses: {} };
-      out[c].total += v; out[c].meses[k] = (out[c].meses[k] || 0) + v;
+      sumar(k, g.cat || '', montoPesos(g, mes) * f);
     }
+    if (pid === '_all' || pid === state.principal) for (const x of gastosFuera(k)) sumar(k, x.cat, x.v);
   }
   return out;
 }
@@ -1657,12 +1663,19 @@ function asegurarCategorias() {
   state.catCuota = state.catCuota || {};
   for (const m of Object.values(state.meses)) for (const g of m.gastos) if (g.cat === undefined) g.cat = categoriaAuto(g);
 }
+const opcionesCat = sel => `<option value="" ${!sel ? 'selected' : ''}>— Sin categoría</option>` +
+  state.categorias.map(c => `<option value="${esc(c)}" ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('') +
+  `<option value="_nueva">+ Nueva categoría…</option>`;
+function pedirCategoria() {
+  const n = prompt('Nombre de la nueva categoría:');
+  if (!n || !n.trim()) return null;
+  if (!state.categorias.includes(n.trim())) state.categorias.push(n.trim());
+  return n.trim();
+}
 function setCategoria(mk, id, cat) {
   if (cat === '_nueva') {
-    const n = prompt('Nombre de la nueva categoría:');
-    if (!n || !n.trim()) { render(); return; }
-    cat = n.trim();
-    if (!state.categorias.includes(cat)) state.categorias.push(cat);
+    cat = pedirCategoria();
+    if (cat === null) { render(); return; }
   }
   const g = state.meses[mk].gastos.find(x => x.id === id);
   g.cat = cat; g.catManual = true;
@@ -1685,15 +1698,17 @@ function renombrarCat(i, v) {
   if (state.categorias.includes(nuevo)) { alert('Ya existe una categoría con ese nombre.'); refrescarConfig(); return; }
   state.categorias[i] = nuevo;
   for (const m of Object.values(state.meses)) for (const g of m.gastos) if (g.cat === viejo) g.cat = nuevo;
+  for (const f of state.presu.filas) if (f.cat === viejo) f.cat = nuevo;
   for (const r of [state.catComercio, state.catCuota]) for (const k in r) if (r[k] === viejo) r[k] = nuevo;
   save(); render();
 }
 function borrarCat(i) {
   const c = state.categorias[i];
-  const n = Object.values(state.meses).reduce((a, m) => a + m.gastos.filter(g => g.cat === c).length, 0);
+  const n = Object.values(state.meses).reduce((a, m) => a + m.gastos.filter(g => g.cat === c).length, 0) + state.presu.filas.filter(f => f.cat === c).length;
   if (!confirm(`¿Borrar la categoría "${c}"?${n ? ` Sus ${n} gasto(s) quedan sin categoría.` : ''}`)) return;
   state.categorias.splice(i, 1);
   for (const m of Object.values(state.meses)) for (const g of m.gastos) if (g.cat === c) { g.cat = ''; delete g.catManual; }
+  for (const f of state.presu.filas) if (f.cat === c) delete f.cat;
   for (const r of [state.catComercio, state.catCuota]) for (const k in r) if (r[k] === c) delete r[k];
   save(); refrescarConfig();
 }
@@ -1812,6 +1827,20 @@ function agregarFila(tipo) {
   if (!n || !n.trim()) return;
   state.presu.filas.push({ id: uid(), nombre: n.trim(), tipo }); save(); render();
 }
+function setCatFila(id, cat) {
+  if (cat === '_nueva') {
+    cat = pedirCategoria();
+    if (cat === null) { render(); return; }
+  }
+  const f = state.presu.filas.find(x => x.id === id);
+  if (cat) f.cat = cat; else delete f.cat;
+  save(); render();
+}
+const selectCatFila = f => f.tipo === 'gasto' && !f.auto ? `<select class="catfila ${f.cat ? '' : 'sincat'}" aria-label="Categoría de ${esc(f.nombre)}" onchange="setCatFila('${f.id}',this.value)">${opcionesCat(f.cat)}</select>` : '';
+// Expenses paid outside the cards that have a category: [{cat, v}] for that month.
+function gastosFuera(k) {
+  return state.presu.filas.filter(f => f.tipo === 'gasto' && !f.auto && f.cat).map(f => ({ cat: f.cat, v: valorPresu(k, f) })).filter(x => x.v);
+}
 function renombrarFila(id, v) { const f = state.presu.filas.find(x => x.id === id); if (f && v.trim()) { f.nombre = v.trim(); save(); } }
 function borrarFila(id) {
   const f = state.presu.filas.find(x => x.id === id);
@@ -1883,7 +1912,7 @@ function renderPresu() {
     <div class="stat"><div class="lbl">Ahorro · ${mesNombre(kHero)}</div><div class="val">${$0(th.ahorro)}</div></div>
     <div class="stat ${th.queda >= 0 ? 'me' : ''}"><div class="lbl">Me queda · ${mesNombre(kHero)}</div><div class="val">${signo(th.queda)}</div><div class="hint">ingresos − gastos − ahorro</div></div>
   </div>
-  <div class="card"><h2>Ingresos y gastos · ${y} <span class="sub">Escribí en cada celda · las tarjetas se completan solas con tu parte del resumen (si escribís un valor, se usa el tuyo) · ⇠ copia los valores del mes anterior</span></h2>
+  <div class="card"><h2>Ingresos y gastos · ${y} <span class="sub">Escribí en cada celda · las tarjetas se completan solas con tu parte del resumen (si escribís un valor, se usa el tuyo) · ⇠ copia los valores del mes anterior · elegí una categoría en tus gastos para verlos en Estadísticas</span></h2>
   <div class="tablewrap presuwrap"><table class="presu"><thead><tr><th class="concepto">Concepto</th>
     ${ks.map(k => `<th class="n">${vista === 'ult8' ? mesCorto(k) : NOMBRES_MES[+k.slice(5) - 1].slice(0, 3)} <button class="small ghost" title="Copiar del mes anterior lo que falte" onclick="copiarMesAnterior('${k}')">⇠</button></th>`).join('')}
     <th class="n">Total</th><th class="n">Promedio</th></tr></thead><tbody>`;
@@ -1896,7 +1925,7 @@ function renderPresu() {
           <input type="text" class="nom" value="${esc(f.nombre)}" onchange="renombrarFila('${f.id}',this.value)" title="${f.auto ? 'Se completa sola con tu parte de la ' + f.auto : 'Renombrar'}">
           <button class="small ghost" title="Subir" onclick="moverFila('${f.id}',-1)">↑</button><button class="small ghost" title="Bajar" onclick="moverFila('${f.id}',1)">↓</button>
           ${f.auto ? '<span class="tag mem" title="Automático desde los resúmenes">auto</span>' : `<button class="small ghost danger" title="Borrar fila" onclick="borrarFila('${f.id}')">✕</button>`}
-        </div></td>` +
+        </div>${selectCatFila(f)}</td>` +
         ks.map(k => {
           const man = valorManual(k, f.id), au = f.auto ? autoTarjeta(k, f.auto) : null;
           const ph = au !== null ? fmtCelda(Math.round(au)) : '';
@@ -1916,8 +1945,29 @@ function renderPresu() {
   h += `<tr class="queda"><td>Me queda</td>${q.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td class="n">${signo(q.reduce((a, b) => a + (b || 0), 0))}</td><td class="n">${signo(prom(q.map(v => v || 0)))}</td></tr>
     <tr class="sub"><td>Acumulado ${vista === 'ult8' ? 'de los 8 meses' : 'del año'}</td>${acum.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td></td><td></td></tr>`;
   h += `</tbody></table></div></div>
-  <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>`;
+  <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
+  ${cardsAhorro()}`;
   return h;
+}
+// Savings history: every month from the first entry to the last one, whatever months the grid shows.
+function serieAhorro() {
+  const todas = state.presu.filas.filter(f => f.tipo === 'ahorro');
+  const con = Object.keys(state.presu.valores).filter(k => todas.some(f => valorPresu(k, f))).sort();
+  if (!con.length) return null;
+  const [y0, m0] = con[0].split('-').map(Number);
+  const ks = [];
+  for (let i = 0; !ks.length || ks[ks.length - 1] < con[con.length - 1]; i++) { const d = new Date(y0, m0 - 1 + i, 1); ks.push(mesKey(d.getFullYear(), d.getMonth() + 1)); }
+  const filas = todas.filter(f => ks.some(k => valorPresu(k, f)));
+  let acc = 0;
+  return { ks, filas, acum: ks.map(k => acc += filas.reduce((a, f) => a + valorPresu(k, f), 0)) };
+}
+function cardsAhorro() {
+  const a = serieAhorro();
+  if (!a) return '';
+  return `<div class="charts">
+    <div class="card"><h2>Ahorro acumulado <span class="sub">${$0(a.acum[a.acum.length - 1])} desde ${mesNombre(a.ks[0])}</span></h2><div class="chartbox"><canvas id="chAhoAcum"></canvas></div></div>
+    <div class="card"><h2>Ahorro por mes <span class="sub">lo que separaste cada mes</span></h2><div class="chartbox"><canvas id="chAhoMes"></canvas></div></div>
+  </div>`;
 }
 function dibujarPresu() {
   charts.forEach(c => c.destroy()); charts = [];
@@ -1938,6 +1988,29 @@ function dibujarPresu() {
           callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}`, footer: i => 'Me queda: ' + money(tots[i[0].dataIndex].queda) } } },
       scales: { x: { grid: { display: false }, border: { color: grid } },
         y: { grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k' } } } }
+  }));
+  const a = serieAhorro();
+  if (!a || !document.getElementById('chAhoAcum')) return;
+  const eje = { x: { grid: { display: false }, border: { color: grid } },
+    y: { grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k' } } };
+  const globo = { backgroundColor: text, titleColor: surface, bodyColor: surface, footerColor: surface, padding: 10, cornerRadius: 8 };
+  const color = cssVar('--s3');
+  charts.push(new Chart(document.getElementById('chAhoAcum'), {
+    type: a.ks.length > 1 ? 'line' : 'bar',
+    data: { labels: a.ks.map(mesCorto), datasets: [{ label: '', data: a.acum, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: .25,
+      ...(a.ks.length > 1 ? {} : { borderRadius: 4, borderSkipped: 'start', maxBarThickness: 56 }) }] },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { ...globo, displayColors: false, callbacks: { label: c => ' Acumulado: ' + money(c.parsed.y) } } }, scales: eje }
+  }));
+  const varias = a.filas.length > 1;
+  charts.push(new Chart(document.getElementById('chAhoMes'), {
+    type: 'bar',
+    data: { labels: a.ks.map(mesCorto), datasets: a.filas.map((f, i) => ({ label: f.nombre, data: a.ks.map(k => valorPresu(k, f)),
+      backgroundColor: cssVar(i < 6 ? '--s' + (i + 3) : '--s-other'), borderColor: surface, borderWidth: varias ? { top: 2 } : 0, borderRadius: varias ? 2 : 4, borderSkipped: varias ? false : 'start', maxBarThickness: 56 })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: varias, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text } },
+        tooltip: { ...globo, filter: i => i.parsed.y !== 0, callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}`, footer: i => 'Acumulado: ' + money(a.acum[i[0].dataIndex]) } } },
+      scales: { x: { ...eje.x, stacked: true }, y: { ...eje.y, stacked: true } } }
   }));
 }
 // Import the "Gastos Mensuales" sheet(s) of the old spreadsheet: names in column A, months as columns.
@@ -2099,9 +2172,11 @@ async function exportarExcel() {
   // Budget values with the card rows already resolved (the workbook builder has no access to the statements).
   const presu = aniosPresu().map(y => {
     const ks = Array.from({ length: 12 }, (_, i) => mesKey(y, i + 1));
-    return { anio: y, filas: state.presu.filas.map(f => ({ nombre: f.nombre, tipo: f.tipo, valores: ks.map(k => valorPresu(k, f)) })) };
+    return { anio: y, filas: state.presu.filas.map(f => ({ nombre: f.nombre, tipo: f.tipo, cat: f.cat || '', valores: ks.map(k => valorPresu(k, f)) })) };
   }).filter(p => p.filas.some(f => f.valores.some(v => v)));
-  const wb = buildWorkbook(ExcelJS, state, { presu });
+  const catFuera = {};
+  for (const k of meses) for (const x of gastosFuera(k)) { catFuera[k] = catFuera[k] || {}; catFuera[k][x.cat] = (catFuera[k][x.cat] || 0) + x.v; }
+  const wb = buildWorkbook(ExcelJS, state, { presu, catFuera });
   const buf = await wb.xlsx.writeBuffer();
   const y = [...new Set(meses.map(k => k.slice(0, 4)))].join('-');
   descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Gastos tarjetas ${y}.xlsx`);
@@ -2135,6 +2210,7 @@ function buildWorkbook(ExcelJS, st, extra) {
     ws.getCell('A3').value = 'Concepto'; style(ws.getCell('A3'), head);
     MESES_N.forEach((m, i) => { const c = ws.getCell(3, 2 + i); c.value = m; style(c, head); c.alignment = { horizontal: 'center' }; });
     ws.getCell(3, 14).value = 'Total'; style(ws.getCell(3, 14), head);
+    ws.getCell(3, 15).value = 'Categoría'; style(ws.getCell(3, 15), head);
     const L = n => ws.getColumn(n).letter;
     let r = 4;
     const subt = {};
@@ -2147,6 +2223,7 @@ function buildWorkbook(ExcelJS, st, extra) {
         f.valores.forEach((v, i) => { if (v) { ws.getCell(r, 2 + i).value = Math.round(v * 100) / 100; ws.getCell(r, 2 + i).numFmt = money; } });
         ws.getCell(r, 14).value = { formula: `SUM(B${r}:M${r})`, result: f.valores.reduce((a, b) => a + b, 0) };
         ws.getCell(r, 14).numFmt = money; ws.getCell(r, 14).font = { bold: true };
+        if (f.cat) ws.getCell(r, 15).value = f.cat;
         r++;
       }
       const hasta = r - 1;
@@ -2172,6 +2249,7 @@ function buildWorkbook(ExcelJS, st, extra) {
     }
     ws.getColumn(1).width = 34;
     for (let c = 2; c <= 14; c++) ws.getColumn(c).width = 14;
+    ws.getColumn(15).width = 24;
   }
 
   // Month sheets first (Resumen references them), Resumen stays as the first tab.
@@ -2289,23 +2367,24 @@ function buildWorkbook(ExcelJS, st, extra) {
     });
   });
   // Categorías: category x month, SUMIFS over the month sheets (only counted expenses)
-  catWs.getCell('A1').value = 'Gastos por categoría y por mes (todas las personas)';
+  catWs.getCell('A1').value = 'Gastos por categoría y por mes (todas las personas, más los gastos con categoría de Ingresos y gastos)';
   catWs.getCell('A1').font = { bold: true, size: 14 };
   catWs.getCell('A3').value = 'Categoría'; style(catWs.getCell('A3'), head);
   keys.forEach((k, i) => { const c = catWs.getCell(3, 2 + i); c.value = mesN(k); style(c, head); c.alignment = { horizontal: 'center' }; });
   const cTot = 2 + keys.length;
   [['Total', cTot], ['Promedio/mes', cTot + 1]].forEach(([t, c]) => { catWs.getCell(3, c).value = t; style(catWs.getCell(3, c), head); });
   const sumaCat = (inf, cat) => inf.gs.filter(g => g.de !== NONE && (g.cat || '') === cat).reduce((a, g) => a + g.pesos + g.usd * (inf.mes.dolar || 0), 0);
-  const listaCat = (st.categorias || []).concat(['']).filter(c => keys.some(k => sumaCat(info[k], c)));
+  const fuera = (k, cat) => Math.round((((extra && extra.catFuera) || {})[k] || {})[cat] * 100 || 0) / 100;
+  const listaCat = (st.categorias || []).concat(['']).filter(c => keys.some(k => sumaCat(info[k], c) || fuera(k, c)));
   listaCat.forEach((cat, i) => {
     const r = 4 + i;
     catWs.getCell(r, 1).value = cat || 'Sin categoría';
     let sum = 0;
     keys.forEach((k, j) => {
-      const inf = info[k], v = Math.round(sumaCat(inf, cat) * 100) / 100; sum += v;
+      const inf = info[k], extraMes = fuera(k, cat), v = Math.round((sumaCat(inf, cat) + extraMes) * 100) / 100; sum += v;
       const crit = cat ? `"${cat.replace(/"/g, '""')}"` : '"="';
       const c = catWs.getCell(r, 2 + j);
-      c.value = { formula: `SUMIFS(${inf.sheet}!${inf.rngI},${inf.sheet}!${inf.rngK},${crit},${inf.sheet}!${inf.rngF},"<>No contar")`, result: v };
+      c.value = { formula: `SUMIFS(${inf.sheet}!${inf.rngI},${inf.sheet}!${inf.rngK},${crit},${inf.sheet}!${inf.rngF},"<>No contar")${extraMes ? '+' + extraMes : ''}`, result: v };
       c.numFmt = money;
     });
     const a = catWs.getCell(r, 2).address, b = catWs.getCell(r, cTot - 1).address;
