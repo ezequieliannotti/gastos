@@ -235,6 +235,13 @@ body.dragging::after { content: "Soltá los PDF acá"; position: fixed; inset: 1
 .chartbox { position: relative; height: 280px; }
 .chartbox.tall { height: 340px; }
 .charts + .card { margin-top: 18px; }
+.charts + .seccion { margin-top: 32px; }
+.vform { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.vform label { display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.vform label[hidden] { display: none; }
+.vform label input, .vform label select { color: var(--text); font-size: 15px; }
+.vform label:first-child { grid-column: 1 / -1; }
+.charts + .card, .card + .charts { margin-top: 0; }
 
 /* ===== budget grid and phone lists ===== */
 table.presu input.celda { width: 82px; text-align: right; padding: 4px 6px; font-variant-numeric: tabular-nums; border-color: transparent; background: transparent; }
@@ -322,7 +329,10 @@ table.presu th .ghost { padding: 0 4px; font-size: 12px; }
   .person .portj input[type=checkbox] { width: 20px; height: 20px; }
   .person .portj > .pagos { margin-left: 26px; }
   .person .portj > div { min-height: 30px; }
-  #pagMonto, #pagFecha { font-size: 16px; }
+  #pagMonto, #pagFecha, .vform input, .vform select, #vform input, #vform select { font-size: 16px; }
+  .vform { grid-template-columns: minmax(0, 1fr); }
+  table.viajest td:nth-child(2), table.viajest th:nth-child(2), table.viajest td:nth-child(5), table.viajest th:nth-child(5) { display: none; }
+  nav.tabs button { font-size: 11px; }
   .card { padding: 15px; border-radius: 14px; }
   .card h2 .sub { display: block; margin: 2px 0 0; }
   .toolbar select, .toolbar input[type=text] { flex: 1 1 140px; min-width: 0; font-size: 16px; }
@@ -569,7 +579,7 @@ function load() {
 }
 let state = load();
 let ui = { tab: 'resumen', mes: null, filtroPersona: '', filtroTarjeta: '', buscar: '' };
-const SECCIONES_APP = [['resumen', 'Resumen', 'home'], ['mov', 'Movimientos', 'list'], ['stats', 'Estadísticas', 'chart'], ['presu', 'Ingresos y gastos', 'wallet', 'Ingresos']];
+const SECCIONES_APP = [['resumen', 'Resumen', 'home'], ['mov', 'Movimientos', 'list'], ['stats', 'Estadísticas', 'chart'], ['presu', 'Ingresos y gastos', 'wallet', 'Ingresos'], ['viajes', 'Viajes', 'plane']];
 function save() {
   state.actualizado = new Date().toISOString();
   try { localStorage.setItem(STORE, JSON.stringify(state)); }
@@ -906,7 +916,8 @@ const ICONOS = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>', pencil: '<path d="M4 20l1-4L16 5l3 3L8 19z"/>',
-  x: '<path d="M6 6l12 12M18 6L6 18"/>', check: '<path d="M5 12l5 5 9-10"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  plane: '<path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>', check: '<path d="M5 12l5 5 9-10"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   half: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>', swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
   left: '<path d="M15 6l-6 6 6 6"/>', right: '<path d="M9 6l6 6-6 6"/>', file: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/>',
   alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'
@@ -1449,6 +1460,7 @@ function render() {
   asegurarPagos();
   asegurarCategorias();
   asegurarPresu();
+  asegurarViajes();
   const meses = mesesOrden();
   if (/^\d{4}-\d{2}$/.test(ui.tab)) { ui.mes = ui.tab; ui.tab = 'mov'; }
   if (!state.meses[ui.mes]) ui.mes = meses[meses.length - 1] || null;
@@ -1461,12 +1473,13 @@ function render() {
     <button aria-label="Mes siguiente" ${i >= meses.length - 1 ? 'disabled' : ''} onclick="cambiarMes('${meses[i + 1]}')">${ic('right')}</button>`;
   const main = document.getElementById('main');
   const foco = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.focus : null;
-  const [titulo, sub] = ui.tab === 'stats' ? ['Estadísticas', 'Cómo evolucionan tus gastos'] : ui.tab === 'presu' ? ['Ingresos y gastos', 'Lo que entra, lo que sale y lo que te queda']
+  const [titulo, sub] = ui.tab === 'viajes' ? ['Viajes', 'Lo que gastás en cada viaje, aparte del resto'] : ui.tab === 'stats' ? ['Estadísticas', 'Cómo evolucionan tus gastos'] : ui.tab === 'presu' ? ['Ingresos y gastos', 'Lo que entra, lo que sale y lo que te queda']
     : [ui.tab === 'mov' ? 'Movimientos' : 'Resumen', ui.mes ? mesNombre(ui.mes) : ''];
   main.innerHTML = bannerArchivo() + `<div class="pagehead"><h1>${titulo}</h1>${sub ? `<p>${sub}</p>` : ''}</div>` +
-    (ui.tab === 'resumen' ? renderResumen() : ui.tab === 'stats' ? renderStats() : ui.tab === 'presu' ? renderPresu() : renderMes(ui.mes));
+    (ui.tab === 'resumen' ? renderResumen() : ui.tab === 'viajes' ? renderViajes() : ui.tab === 'stats' ? renderStats() : ui.tab === 'presu' ? renderPresu() : renderMes(ui.mes));
   if (ui.tab === 'stats') dibujarStats();
   if (ui.tab === 'presu') dibujarPresu();
+  if (ui.tab === 'viajes') dibujarViajes();
   if (foco) { const el = main.querySelector(`[data-focus="${foco}"]`); if (el) { el.focus(); if (el.select) el.select(); } }
 }
 function bannerArchivo() {
@@ -2170,10 +2183,10 @@ document.addEventListener('keydown', e => {
     if (sig) sig.focus(); else el.blur();
     return;
   }
-  const form = el.closest('#man');
+  const form = el.closest('#man, form[data-enter]');
   if (form) {
     e.preventDefault();
-    const campos = [...form.querySelectorAll('input')];
+    const campos = [...form.querySelectorAll('input')].filter(c => c.offsetParent);
     const vacio = campos.find(c => !c.value.trim() && c !== el);
     if (!el.value.trim()) return;
     if (vacio) vacio.focus(); else form.requestSubmit();
@@ -2450,6 +2463,238 @@ async function importarExcel(file) {
     save(); render();
     toast(`✅ Importé ${plan.length} fila(s) de "${file.name}".`);
   } catch (e) { console.error(e); toast('❌ No pude importar el Excel: ' + e.message, 8000); }
+}
+
+// ===== VIAJES (kept apart: never added to the cards, the statistics or Ingresos y gastos) =====
+// state.viajes = [{ id, nombre, desde, hasta, dolar, gastos: [{ id, fecha, desc, cat, pesos, usd, cotiz }] }]
+const CATS_VIAJE = ['Pasajes', 'Alojamiento', 'Comida', 'Transporte', 'Excursiones', 'Compras', 'Otros'];
+function asegurarViajes() { if (!Array.isArray(state.viajes)) state.viajes = []; }
+const montoViaje = g => (g.pesos || 0) + (g.usd || 0) * (g.cotiz || 0);
+function totalViaje(v) {
+  const usd = v.gastos.reduce((a, g) => a + (g.usd || 0), 0);
+  const usdPesos = v.gastos.reduce((a, g) => a + (g.usd || 0) * (g.cotiz || 0), 0);
+  return { total: v.gastos.reduce((a, g) => a + montoViaje(g), 0), usd, usdPesos };
+}
+const diasViaje = v => v.desde && v.hasta && v.hasta >= v.desde ? Math.round((new Date(v.hasta) - new Date(v.desde)) / 864e5) + 1 : null;
+const viajesOrden = () => state.viajes.slice().sort((a, b) => (b.desde || '').localeCompare(a.desde || ''));
+function viajeActual() {
+  const v = state.viajes.find(x => x.id === ui.viaje) || viajesOrden()[0];
+  ui.viaje = v && v.id;
+  return v;
+}
+const optsCatViaje = sel => CATS_VIAJE.map(c => `<option ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
+// Today if it falls inside the trip, otherwise its first day.
+function fechaSugerida(v) {
+  const h = hoyISO();
+  return v.desde && (h < v.desde || (v.hasta && h > v.hasta)) ? v.desde : h;
+}
+// The dollar rate offered for a new expense: the last one paid on this trip, else the trip's reference.
+function cotizSugerida(v) {
+  const us = v.gastos.filter(g => g.usd > 0 && g.cotiz > 0);
+  return us.length ? us[us.length - 1].cotiz : v.dolar || '';
+}
+function rangoViaje(v) {
+  if (!v.desde) return '';
+  return fechaCorta(v.desde) + (v.hasta ? ' al ' + fechaCorta(v.hasta) : ' · en curso');
+}
+
+function abrirViaje(id) {
+  const v = id ? state.viajes.find(x => x.id === id) : null;
+  document.getElementById('vviaje')?.remove();
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'vviaje';
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  bg.innerHTML = `<div class="modal" style="max-width:520px">
+    <h3>${v ? 'Editar viaje' : 'Nuevo viaje'}</h3>
+    <div class="vform">
+      <label>Nombre<input type="text" id="vvNombre" value="${esc(v ? v.nombre : '')}" placeholder="Viaje a Brasil"></label>
+      <label>Desde<input type="date" id="vvDesde" value="${v ? v.desde || '' : hoyISO()}"></label>
+      <label>Hasta <span class="muted">(si ya sabés)</span><input type="date" id="vvHasta" value="${v ? v.hasta || '' : ''}"></label>
+      <label>Dólar de referencia $<input type="text" inputmode="decimal" id="vvDolar" value="${v && v.dolar ? fmtCelda(v.dolar) : ''}" placeholder="Ej: 1450"></label>
+    </div>
+    <p class="muted" style="font-size:13px">El dólar de referencia se propone para los gastos en dólares y sirve para comparar viajes de distintos años.</p>
+    <div class="toolbar" style="margin:16px 0 0">${v ? `<button class="danger" onclick="borrarViaje('${v.id}')">${ic('x')}Borrar viaje</button>` : ''}<span class="sp"></span>
+      <button onclick="document.getElementById('vviaje').remove()">Cancelar</button><button class="primary" onclick="guardarViaje(${v ? `'${v.id}'` : ''})">Guardar</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+  if (!esCelu()) document.getElementById('vvNombre').focus();
+}
+function guardarViaje(id) {
+  const nombre = document.getElementById('vvNombre').value.trim();
+  const desde = document.getElementById('vvDesde').value, hasta = document.getElementById('vvHasta').value;
+  const dolar = parsePlata(document.getElementById('vvDolar').value);
+  if (!nombre) { toast('Poné un nombre, por ejemplo "Viaje a Brasil".'); return; }
+  if (!desde) { toast('Poné la fecha en que empieza el viaje.'); return; }
+  if (hasta && hasta < desde) { toast('La fecha de vuelta es anterior a la de ida.'); return; }
+  if (Number.isNaN(dolar)) { toast('No entendí el dólar de referencia. Escribilo como 1450 o 1.450,50.'); return; }
+  asegurarViajes();
+  let v = id && state.viajes.find(x => x.id === id);
+  if (!v) { v = { id: uid(), gastos: [] }; state.viajes.push(v); }
+  Object.assign(v, { nombre, desde, hasta: hasta || '', dolar: dolar || 0 });
+  ui.viaje = v.id;
+  document.getElementById('vviaje').remove();
+  save(); render();
+  toast(`✓ ${id ? 'Viaje actualizado' : 'Viaje creado'}: ${nombre}`);
+}
+function borrarViaje(id) {
+  const v = state.viajes.find(x => x.id === id);
+  if (!confirm(`¿Borrar "${v.nombre}"${v.gastos.length ? ` y sus ${v.gastos.length} gasto(s)` : ''}? No se puede deshacer.`)) return;
+  state.viajes = state.viajes.filter(x => x.id !== id);
+  ui.viaje = null;
+  document.getElementById('vviaje')?.remove();
+  save(); render();
+}
+// Reads an expense from a set of fields (the quick form or the edit dialog); null if something is wrong.
+function leerGastoViaje(c) {
+  const desc = c.desc.value.trim(), monto = parsePlata(c.monto.value), usd = c.mon.value === 'usd';
+  const cotiz = usd ? parsePlata(c.cotiz.value) : 0;
+  if (!desc) { toast('Poné qué fue, por ejemplo "Cena" o "Taxi".'); c.desc.focus(); return null; }
+  if (monto === null || Number.isNaN(monto) || monto <= 0) { toast('No entendí el monto. Escribilo como 15.000 o 15000,50.'); c.monto.focus(); return null; }
+  if (usd && (cotiz === null || Number.isNaN(cotiz) || cotiz <= 0)) { toast('Poné a cuánto pagaste el dólar, por ejemplo 1450.'); c.cotiz.focus(); return null; }
+  return { fecha: c.fecha.value || hoyISO(), desc, cat: c.cat.value, pesos: usd ? 0 : monto, usd: usd ? monto : 0, cotiz: usd ? cotiz : 0 };
+}
+function agregarGastoViaje() {
+  const f = document.getElementById('vform'), v = viajeActual();
+  const g = leerGastoViaje({ fecha: f.fecha, desc: f.desc, cat: f.cat, mon: f.mon, monto: f.monto, cotiz: f.cotiz });
+  if (!g) return;
+  v.gastos.push({ id: uid(), ...g });
+  ui.vform = { fecha: g.fecha, cat: g.cat, mon: f.mon.value };
+  save(); render();
+  toast(`✓ Anotado: ${g.desc} ${$(montoViaje(g))}`);
+  document.querySelector('#vform [name=desc]')?.focus();
+}
+function abrirGastoViaje(gid) {
+  const v = viajeActual(), g = v.gastos.find(x => x.id === gid), usd = g.usd > 0;
+  document.getElementById('vgasto')?.remove();
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'vgasto';
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  bg.innerHTML = `<div class="modal" style="max-width:520px">
+    <h3>Editar gasto del viaje</h3><div class="muted">${esc(v.nombre)}</div>
+    <div class="vform" style="margin-top:14px">
+      <label>Fecha<input type="date" id="vgFecha" value="${g.fecha}"></label>
+      <label>Qué fue<input type="text" id="vgDesc" value="${esc(g.desc)}"></label>
+      <label>Categoría<select id="vgCat">${optsCatViaje(g.cat)}</select></label>
+      <label>Moneda<select id="vgMon" onchange="document.getElementById('vgCotizBox').hidden=this.value!=='usd'"><option value="ars" ${usd ? '' : 'selected'}>Pesos</option><option value="usd" ${usd ? 'selected' : ''}>Dólares</option></select></label>
+      <label>Monto<input type="text" inputmode="decimal" id="vgMonto" value="${fmtCelda(usd ? g.usd : g.pesos)}"></label>
+      <label id="vgCotizBox" ${usd ? '' : 'hidden'}>Lo pagué a $<input type="text" inputmode="decimal" id="vgCotiz" value="${g.cotiz ? fmtCelda(g.cotiz) : cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}"></label>
+    </div>
+    <div class="toolbar" style="margin:16px 0 0"><button class="danger" onclick="borrarGastoViaje('${g.id}')">${ic('x')}Borrar</button><span class="sp"></span>
+      <button onclick="document.getElementById('vgasto').remove()">Cancelar</button><button class="primary" onclick="guardarGastoViaje('${g.id}')">Guardar</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+}
+function guardarGastoViaje(gid) {
+  const v = viajeActual(), g = v.gastos.find(x => x.id === gid);
+  const $id = id => document.getElementById(id);
+  const n = leerGastoViaje({ fecha: $id('vgFecha'), desc: $id('vgDesc'), cat: $id('vgCat'), mon: $id('vgMon'), monto: $id('vgMonto'), cotiz: $id('vgCotiz') });
+  if (!n) return;
+  Object.assign(g, n);
+  $id('vgasto').remove();
+  save(); render();
+  toast('✓ Gasto actualizado');
+}
+function borrarGastoViaje(gid) {
+  const v = viajeActual(), g = v.gastos.find(x => x.id === gid);
+  if (!confirm(`¿Borrar "${g.desc}" (${$(montoViaje(g))})?`)) return;
+  v.gastos = v.gastos.filter(x => x.id !== gid);
+  document.getElementById('vgasto')?.remove();
+  save(); render();
+}
+
+function renderViajes() {
+  asegurarViajes();
+  if (!state.viajes.length) return `<div class="card empty">${ic('plane', 'grande')}<h2>Todavía no cargaste ningún viaje</h2>
+    <p>Creá un viaje y anotá lo que vas gastando, en pesos o en dólares. No se suma a tus tarjetas, a las estadísticas ni a Ingresos y gastos.</p>
+    <button class="primary" onclick="abrirViaje()">${ic('plus')}Nuevo viaje</button></div>`;
+  const v = viajeActual(), t = totalViaje(v), dias = diasViaje(v), celu = esCelu();
+  const vf = ui.vform || {}, mon = vf.mon || 'ars';
+  let h = `<div class="toolbar">
+      <select aria-label="Viaje" onchange="ui.viaje=this.value;render()" style="font-weight:600">${viajesOrden().map(x => `<option value="${x.id}" ${x.id === v.id ? 'selected' : ''}>${esc(x.nombre)}${x.desde ? ' · ' + mesCorto(x.desde.slice(0, 7)) : ''}</option>`).join('')}</select>
+      <button class="ghost" onclick="abrirViaje('${v.id}')">${ic('pencil')}Editar viaje</button><span class="sp"></span>
+      <button class="primary" onclick="abrirViaje()">${ic('plus')}Nuevo viaje</button></div>
+    <div class="hero">
+      <div class="stat me"><div class="lbl">Total del viaje</div><div class="val">${$0(t.total)}</div><div class="hint">${v.gastos.length} gasto${v.gastos.length === 1 ? '' : 's'} · ${rangoViaje(v)}</div></div>
+      <div class="stat"><div class="lbl">Pagado en dólares</div>${t.usd ? `<div class="val">U$S ${fmt.format(t.usd)}</div><div class="hint">Te costó ${$0(t.usdPesos)}</div>` : '<div class="val muted">—</div><div class="hint">Sin gastos en dólares</div>'}</div>
+      <div class="stat"><div class="lbl">Por día</div>${dias ? `<div class="val">${$0(t.total / dias)}</div><div class="hint">${dias} día${dias === 1 ? '' : 's'}</div>` : '<div class="val muted">—</div><div class="hint">Poné la fecha de vuelta para calcularlo</div>'}</div>
+      <div class="stat"><div class="lbl">En dólares (aprox.)</div>${v.dolar ? `<div class="val">U$S ${fmt0.format(Math.round(t.total / v.dolar))}</div><div class="hint">Al dólar de referencia de ${$0(v.dolar)}</div>` : '<div class="val muted">—</div><div class="hint">Cargá el dólar de referencia del viaje</div>'}</div>
+    </div>
+    <div class="card"><h2>Anotar gasto</h2>
+      <form id="vform" class="toolbar" data-enter onsubmit="agregarGastoViaje();return false" style="margin:0">
+        <input type="date" name="fecha" aria-label="Fecha" value="${vf.fecha && (!v.desde || vf.fecha >= v.desde) ? vf.fecha : fechaSugerida(v)}">
+        <input type="text" name="desc" aria-label="Qué fue" placeholder="Qué fue (cena, taxi, hotel…)" enterkeyhint="next" style="flex:1;min-width:180px">
+        <select name="cat" aria-label="Categoría">${optsCatViaje(vf.cat || 'Comida')}</select>
+        <select name="mon" aria-label="Moneda" onchange="document.getElementById('vCotiz').hidden=this.value!=='usd'"><option value="ars" ${mon === 'ars' ? 'selected' : ''}>$ Pesos</option><option value="usd" ${mon === 'usd' ? 'selected' : ''}>U$S Dólares</option></select>
+        <input type="text" name="monto" aria-label="Monto" placeholder="Monto" inputmode="decimal" enterkeyhint="done" style="width:120px">
+        <label id="vCotiz" ${mon === 'usd' ? '' : 'hidden'} style="display:inline-flex;align-items:center;gap:6px">a $<input type="text" name="cotiz" aria-label="Cotización del dólar" inputmode="decimal" value="${cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}" style="width:90px"></label>
+        <button class="primary" type="submit">${ic('plus')}Anotar</button>
+      </form></div>`;
+
+  const gs = v.gastos.slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const original = g => g.usd ? `U$S ${fmt.format(g.usd)} a ${$0(g.cotiz)}` : '';
+  h += `<div class="card"><h2>Gastos del viaje <span class="sub">${gs.length ? 'Tocá un gasto para editarlo o borrarlo' : ''}</span></h2>`;
+  if (!gs.length) h += '<p class="muted" style="margin:0">Todavía no anotaste gastos en este viaje.</p>';
+  else if (celu) h += gs.map(g => `<div class="mov" role="button" tabindex="0" onclick="abrirGastoViaje('${g.id}')" onkeydown="if(event.key==='Enter')abrirGastoViaje('${g.id}')">
+      <div class="mtop"><span class="mdesc">${esc(g.desc)}</span><b class="mamt">${$(montoViaje(g))}</b></div>
+      <div class="mmeta">${fechaCorta(g.fecha)} · ${esc(g.cat)}${g.usd ? ' · ' + original(g) : ''}</div></div>`).join('');
+  else h += `<div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Qué fue</th><th>Categoría</th><th class="n">En dólares</th><th class="n">Total $</th></tr></thead><tbody>
+      ${gs.map(g => `<tr><td class="pc"><button class="small ghost pencil" aria-label="Editar ${esc(g.desc)}" onclick="abrirGastoViaje('${g.id}')">${ic('pencil')}</button></td>
+        <td>${fechaCorta(g.fecha)}</td><td class="desc">${esc(g.desc)}</td><td>${esc(g.cat)}</td><td class="n muted">${original(g)}</td><td class="n"><b>${$(montoViaje(g))}</b></td></tr>`).join('')}
+      <tr class="tot"><td></td><td colspan="4">Total</td><td class="n">${$(t.total)}</td></tr></tbody></table></div>`;
+  h += '</div>';
+  if (gs.length) h += `<div class="charts">
+      <div class="card"><h2>Por categoría</h2><div class="chartbox"><canvas id="chVCat"></canvas></div></div>
+      <div class="card"><h2>Por día</h2><div class="chartbox"><canvas id="chVDia"></canvas></div></div></div>`;
+
+  // Every trip, oldest to newest, to compare across the years
+  const todos = state.viajes.slice().sort((a, b) => (a.desde || '').localeCompare(b.desde || ''));
+  const enUsd = ui.viajeComp === 'usd';
+  h += `<h2 class="seccion">Todos tus viajes</h2>
+    <div class="card"><h2>Comparación <span class="sub">${enUsd ? 'en dólares, al dólar de referencia de cada viaje' : 'en pesos de cada momento'}</span></h2>
+      <div class="toolbar"><select aria-label="Comparar en" onchange="ui.viajeComp=this.value;render()"><option value="ars">En pesos</option><option value="usd" ${enUsd ? 'selected' : ''}>En dólares (aprox.)</option></select>
+        ${enUsd && todos.some(x => !x.dolar) ? '<span class="muted" style="font-size:13px">Los viajes sin dólar de referencia no aparecen.</span>' : ''}</div>
+      <div class="chartbox"><canvas id="chViajes"></canvas></div>
+      <div class="tablewrap" style="margin-top:16px"><table class="viajest"><thead><tr><th>Viaje</th><th>Cuándo</th><th class="n">Días</th><th class="n">Total $</th><th class="n">Por día</th><th class="n">≈ U$S</th></tr></thead><tbody>
+      ${todos.slice().reverse().map(x => { const tx = totalViaje(x), d = diasViaje(x); return `<tr class="${x.id === v.id ? 'me' : ''}">
+        <td><button class="cellbtn" onclick="ui.viaje='${x.id}';render();window.scrollTo(0,0)">${esc(x.nombre)}</button></td><td>${x.desde ? mesNombre(x.desde.slice(0, 7)) : '—'}</td>
+        <td class="n">${d || '—'}</td><td class="n">${$0(tx.total)}</td><td class="n">${d ? $0(tx.total / d) : '—'}</td><td class="n">${x.dolar ? fmt0.format(Math.round(tx.total / x.dolar)) : '—'}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <p class="muted" style="margin:10px 0 0;font-size:13px">Los viajes van aparte: no se suman a tus tarjetas, a las estadísticas ni a Ingresos y gastos.</p></div>`;
+  return h;
+}
+function dibujarViajes() {
+  charts.forEach(c => c.destroy()); charts = [];
+  if (typeof Chart === 'undefined' || !document.getElementById('chViajes')) return;
+  const text = cssVar('--text'), grid = cssVar('--grid');
+  Chart.defaults.color = cssVar('--muted'); Chart.defaults.animation.duration = 300;
+  const money = v => '$ ' + fmt0.format(Math.round(v));
+  const corto = v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k';
+  const ejeY = (fmtTick) => ({ grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: fmtTick } });
+  const ejeX = { grid: { display: false }, border: { color: grid } };
+  const barra = { borderRadius: 4, borderSkipped: 'start', maxBarThickness: 48 };
+  const v = viajeActual();
+  if (document.getElementById('chVCat')) {
+    const porCat = {}; v.gastos.forEach(g => porCat[g.cat] = (porCat[g.cat] || 0) + montoViaje(g));
+    const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]), tot = cats.reduce((a, c) => a + porCat[c], 0);
+    charts.push(new Chart(document.getElementById('chVCat'), {
+      type: 'bar', data: { labels: cats, datasets: [{ label: '', data: cats.map(c => porCat[c]), backgroundColor: cssVar('--s3'), ...barra, maxBarThickness: 26 }] },
+      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ` ${money(c.parsed.x)} · ${(c.parsed.x / tot * 100).toFixed(0)}%` } } },
+        scales: { x: ejeY(corto), y: { grid: { display: false }, border: { color: grid }, ticks: { color: text } } } }
+    }));
+    const dias = [...new Set(v.gastos.map(g => g.fecha))].sort();
+    charts.push(new Chart(document.getElementById('chVDia'), {
+      type: 'bar', data: { labels: dias.map(d => fechaCorta(d).slice(0, 5)), datasets: [{ label: '', data: dias.map(d => v.gastos.filter(g => g.fecha === d).reduce((a, g) => a + montoViaje(g), 0)), backgroundColor: cssVar('--s1'), ...barra }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ' ' + money(c.parsed.y) } } }, scales: { x: ejeX, y: ejeY(corto) } }
+    }));
+  }
+  const enUsd = ui.viajeComp === 'usd';
+  const todos = state.viajes.slice().sort((a, b) => (a.desde || '').localeCompare(b.desde || '')).filter(x => !enUsd || x.dolar);
+  const val = x => enUsd ? totalViaje(x).total / x.dolar : totalViaje(x).total;
+  charts.push(new Chart(document.getElementById('chViajes'), {
+    type: 'bar',
+    data: { labels: todos.map(x => [x.nombre.length > 22 ? x.nombre.slice(0, 21) + '…' : x.nombre, x.desde ? mesCorto(x.desde.slice(0, 7)) : '']),
+      datasets: [{ label: '', data: todos.map(val), backgroundColor: todos.map(x => x.id === v.id ? cssVar('--accent-strong') : cssVar('--s7')), ...barra, maxBarThickness: 56 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { title: i => todos[i[0].dataIndex].nombre, label: c => ' ' + (enUsd ? 'U$S ' + fmt0.format(Math.round(c.parsed.y)) : money(c.parsed.y)) } } },
+      scales: { x: ejeX, y: ejeY(enUsd ? (n => 'U$S ' + fmt0.format(n)) : corto) } }
+  }));
 }
 
 // ===== CONFIG =====
