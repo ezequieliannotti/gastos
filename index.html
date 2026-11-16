@@ -2469,10 +2469,12 @@ async function importarExcel(file) {
 // state.viajes = [{ id, nombre, desde, hasta, dolar, gastos: [{ id, fecha, desc, cat, pesos, usd, cotiz }] }]
 const CATS_VIAJE = ['Pasajes', 'Alojamiento', 'Comida', 'Transporte', 'Excursiones', 'Compras', 'Otros'];
 function asegurarViajes() { if (!Array.isArray(state.viajes)) state.viajes = []; }
-const montoViaje = g => (g.pesos || 0) + (g.usd || 0) * (g.cotiz || 0);
+const entreViaje = g => g.entre > 1 ? g.entre : 1;
+const montoEnteroViaje = g => (g.pesos || 0) + (g.usd || 0) * (g.cotiz || 0);
+const montoViaje = g => montoEnteroViaje(g) / entreViaje(g);
 function totalViaje(v) {
-  const usd = v.gastos.reduce((a, g) => a + (g.usd || 0), 0);
-  const usdPesos = v.gastos.reduce((a, g) => a + (g.usd || 0) * (g.cotiz || 0), 0);
+  const usd = v.gastos.reduce((a, g) => a + (g.usd || 0) / entreViaje(g), 0);
+  const usdPesos = v.gastos.reduce((a, g) => a + (g.usd || 0) * (g.cotiz || 0) / entreViaje(g), 0);
   return { total: v.gastos.reduce((a, g) => a + montoViaje(g), 0), usd, usdPesos };
 }
 const diasViaje = v => v.desde && v.hasta && v.hasta >= v.desde ? Math.round((new Date(v.hasta) - new Date(v.desde)) / 864e5) + 1 : null;
@@ -2550,17 +2552,25 @@ function leerGastoViaje(c) {
   if (!desc) { toast('Poné qué fue, por ejemplo "Cena" o "Taxi".'); c.desc.focus(); return null; }
   if (monto === null || Number.isNaN(monto) || monto <= 0) { toast('No entendí el monto. Escribilo como 15.000 o 15000,50.'); c.monto.focus(); return null; }
   if (usd && (cotiz === null || Number.isNaN(cotiz) || cotiz <= 0)) { toast('Poné a cuánto pagaste el dólar, por ejemplo 1450.'); c.cotiz.focus(); return null; }
-  return { fecha: c.fecha.value || hoyISO(), desc, cat: c.cat.value, pesos: usd ? 0 : monto, usd: usd ? monto : 0, cotiz: usd ? cotiz : 0 };
+  const entre = c.entre.value.trim() === '' ? 1 : Number(c.entre.value);
+  if (!Number.isInteger(entre) || entre < 1 || entre > 50) { toast('Poné entre cuántas personas se divide: 1 si es solo tuyo.'); c.entre.focus(); return null; }
+  return { fecha: c.fecha.value || hoyISO(), desc, cat: c.cat.value, pesos: usd ? 0 : monto, usd: usd ? monto : 0, cotiz: usd ? cotiz : 0, entre };
 }
 function agregarGastoViaje() {
   const f = document.getElementById('vform'), v = viajeActual();
-  const g = leerGastoViaje({ fecha: f.fecha, desc: f.desc, cat: f.cat, mon: f.mon, monto: f.monto, cotiz: f.cotiz });
+  const g = leerGastoViaje({ fecha: f.fecha, desc: f.desc, cat: f.cat, mon: f.mon, monto: f.monto, cotiz: f.cotiz, entre: f.entre });
   if (!g) return;
   v.gastos.push({ id: uid(), ...g });
+  v.entre = g.entre;   // the next expense of this trip starts with the same number of people
   ui.vform = { fecha: g.fecha, cat: g.cat, mon: f.mon.value };
   save(); render();
-  toast(`✓ Anotado: ${g.desc} ${$(montoViaje(g))}`);
+  toast(`✓ Anotado: ${g.desc} ${$(montoViaje(g))}${g.entre > 1 ? ` (tu parte de ${$(montoEnteroViaje(g))})` : ''}`);
   document.querySelector('#vform [name=desc]')?.focus();
+}
+function mostrarParteViaje() {
+  const f = document.getElementById('vform'), out = document.getElementById('vParte');
+  const n = parsePlata(f.monto.value), entre = Number(f.entre.value), usd = f.mon.value === 'usd', cotiz = usd ? parsePlata(f.cotiz.value) : 1;
+  out.textContent = n > 0 && entre > 1 && Number.isInteger(entre) && cotiz > 0 ? `Te toca ${$(n * cotiz / entre)}` : '';
 }
 function abrirGastoViaje(gid) {
   const v = viajeActual(), g = v.gastos.find(x => x.id === gid), usd = g.usd > 0;
@@ -2576,6 +2586,7 @@ function abrirGastoViaje(gid) {
       <label>Moneda<select id="vgMon" onchange="document.getElementById('vgCotizBox').hidden=this.value!=='usd'"><option value="ars" ${usd ? '' : 'selected'}>Pesos</option><option value="usd" ${usd ? 'selected' : ''}>Dólares</option></select></label>
       <label>Monto<input type="text" inputmode="decimal" id="vgMonto" value="${fmtCelda(usd ? g.usd : g.pesos)}"></label>
       <label id="vgCotizBox" ${usd ? '' : 'hidden'}>Lo pagué a $<input type="text" inputmode="decimal" id="vgCotiz" value="${g.cotiz ? fmtCelda(g.cotiz) : cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}"></label>
+      <label>Dividido entre (personas)<input type="number" min="1" max="50" step="1" inputmode="numeric" id="vgEntre" value="${entreViaje(g)}"></label>
     </div>
     <div class="toolbar" style="margin:16px 0 0"><button class="danger" onclick="borrarGastoViaje('${g.id}')">${ic('x')}Borrar</button><span class="sp"></span>
       <button onclick="document.getElementById('vgasto').remove()">Cancelar</button><button class="primary" onclick="guardarGastoViaje('${g.id}')">Guardar</button></div>
@@ -2585,7 +2596,7 @@ function abrirGastoViaje(gid) {
 function guardarGastoViaje(gid) {
   const v = viajeActual(), g = v.gastos.find(x => x.id === gid);
   const $id = id => document.getElementById(id);
-  const n = leerGastoViaje({ fecha: $id('vgFecha'), desc: $id('vgDesc'), cat: $id('vgCat'), mon: $id('vgMon'), monto: $id('vgMonto'), cotiz: $id('vgCotiz') });
+  const n = leerGastoViaje({ fecha: $id('vgFecha'), desc: $id('vgDesc'), cat: $id('vgCat'), mon: $id('vgMon'), monto: $id('vgMonto'), cotiz: $id('vgCotiz'), entre: $id('vgEntre') });
   if (!n) return;
   Object.assign(g, n);
   $id('vgasto').remove();
@@ -2612,30 +2623,32 @@ function renderViajes() {
       <button class="ghost" onclick="abrirViaje('${v.id}')">${ic('pencil')}Editar viaje</button><span class="sp"></span>
       <button class="primary" onclick="abrirViaje()">${ic('plus')}Nuevo viaje</button></div>
     <div class="hero">
-      <div class="stat me"><div class="lbl">Total del viaje</div><div class="val">${$0(t.total)}</div><div class="hint">${v.gastos.length} gasto${v.gastos.length === 1 ? '' : 's'} · ${rangoViaje(v)}</div></div>
+      <div class="stat me"><div class="lbl">Lo que gasté en el viaje</div><div class="val">${$0(t.total)}</div><div class="hint">${v.gastos.length} gasto${v.gastos.length === 1 ? '' : 's'} · ${rangoViaje(v)}</div></div>
       <div class="stat"><div class="lbl">Pagado en dólares</div>${t.usd ? `<div class="val">U$S ${fmt.format(t.usd)}</div><div class="hint">Te costó ${$0(t.usdPesos)}</div>` : '<div class="val muted">—</div><div class="hint">Sin gastos en dólares</div>'}</div>
       <div class="stat"><div class="lbl">Por día</div>${dias ? `<div class="val">${$0(t.total / dias)}</div><div class="hint">${dias} día${dias === 1 ? '' : 's'}</div>` : '<div class="val muted">—</div><div class="hint">Poné la fecha de vuelta para calcularlo</div>'}</div>
       <div class="stat"><div class="lbl">En dólares (aprox.)</div>${v.dolar ? `<div class="val">U$S ${fmt0.format(Math.round(t.total / v.dolar))}</div><div class="hint">Al dólar de referencia de ${$0(v.dolar)}</div>` : '<div class="val muted">—</div><div class="hint">Cargá el dólar de referencia del viaje</div>'}</div>
     </div>
     <div class="card"><h2>Anotar gasto</h2>
-      <form id="vform" class="toolbar" data-enter onsubmit="agregarGastoViaje();return false" style="margin:0">
+      <form id="vform" class="toolbar" data-enter onsubmit="agregarGastoViaje();return false" oninput="mostrarParteViaje()" onchange="mostrarParteViaje()" style="margin:0">
         <input type="date" name="fecha" aria-label="Fecha" value="${vf.fecha && (!v.desde || vf.fecha >= v.desde) ? vf.fecha : fechaSugerida(v)}">
         <input type="text" name="desc" aria-label="Qué fue" placeholder="Qué fue (cena, taxi, hotel…)" enterkeyhint="next" style="flex:1;min-width:180px">
         <select name="cat" aria-label="Categoría">${optsCatViaje(vf.cat || 'Comida')}</select>
         <select name="mon" aria-label="Moneda" onchange="document.getElementById('vCotiz').hidden=this.value!=='usd'"><option value="ars" ${mon === 'ars' ? 'selected' : ''}>$ Pesos</option><option value="usd" ${mon === 'usd' ? 'selected' : ''}>U$S Dólares</option></select>
         <input type="text" name="monto" aria-label="Monto" placeholder="Monto" inputmode="decimal" enterkeyhint="done" style="width:120px">
         <label id="vCotiz" ${mon === 'usd' ? '' : 'hidden'} style="display:inline-flex;align-items:center;gap:6px">a $<input type="text" name="cotiz" aria-label="Cotización del dólar" inputmode="decimal" value="${cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}" style="width:90px"></label>
+        <label style="display:inline-flex;align-items:center;gap:6px" title="Entre cuántas personas se divide: se anota solo tu parte">÷<input type="number" name="entre" min="1" max="50" step="1" inputmode="numeric" aria-label="Dividido entre cuántas personas" value="${v.entre || 1}" style="width:64px">personas</label>
+        <span id="vParte" class="paid" aria-live="polite"></span>
         <button class="primary" type="submit">${ic('plus')}Anotar</button>
       </form></div>`;
 
   const gs = v.gastos.slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const original = g => g.usd ? `U$S ${fmt.format(g.usd)} a ${$0(g.cotiz)}` : '';
+  const original = g => [g.usd ? `U$S ${fmt.format(g.usd)} a ${$0(g.cotiz)}` : '', entreViaje(g) > 1 ? `${$0(montoEnteroViaje(g))} ÷ ${entreViaje(g)}` : ''].filter(Boolean).join(' · ');
   h += `<div class="card"><h2>Gastos del viaje <span class="sub">${gs.length ? 'Tocá un gasto para editarlo o borrarlo' : ''}</span></h2>`;
   if (!gs.length) h += '<p class="muted" style="margin:0">Todavía no anotaste gastos en este viaje.</p>';
   else if (celu) h += gs.map(g => `<div class="mov" role="button" tabindex="0" onclick="abrirGastoViaje('${g.id}')" onkeydown="if(event.key==='Enter')abrirGastoViaje('${g.id}')">
       <div class="mtop"><span class="mdesc">${esc(g.desc)}</span><b class="mamt">${$(montoViaje(g))}</b></div>
-      <div class="mmeta">${fechaCorta(g.fecha)} · ${esc(g.cat)}${g.usd ? ' · ' + original(g) : ''}</div></div>`).join('');
-  else h += `<div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Qué fue</th><th>Categoría</th><th class="n">En dólares</th><th class="n">Total $</th></tr></thead><tbody>
+      <div class="mmeta">${fechaCorta(g.fecha)} · ${esc(g.cat)}${original(g) ? ' · ' + original(g) : ''}</div></div>`).join('');
+  else h += `<div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Qué fue</th><th>Categoría</th><th class="n">Detalle</th><th class="n">Mi parte $</th></tr></thead><tbody>
       ${gs.map(g => `<tr><td class="pc"><button class="small ghost pencil" aria-label="Editar ${esc(g.desc)}" onclick="abrirGastoViaje('${g.id}')">${ic('pencil')}</button></td>
         <td>${fechaCorta(g.fecha)}</td><td class="desc">${esc(g.desc)}</td><td>${esc(g.cat)}</td><td class="n muted">${original(g)}</td><td class="n"><b>${$(montoViaje(g))}</b></td></tr>`).join('')}
       <tr class="tot"><td></td><td colspan="4">Total</td><td class="n">${$(t.total)}</td></tr></tbody></table></div>`;
