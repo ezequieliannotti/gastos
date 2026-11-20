@@ -805,7 +805,8 @@ async function sincronizarDrive() {
     const cambioLocal = local !== drive.remoto;
     drive.fileId = m ? m.id : null;   // no file in Drive (or it was deleted): create a new one
     let traer = false;
-    if (m && (!Object.keys(state.meses).length || (cambioRemoto && !cambioLocal))) traer = true;
+    // first sync of an empty device: bring Drive's copy. (Not just "no months": an account without months yet would lose every edit.)
+    if (m && ((!drive.remoto && !hayDatos()) || (cambioRemoto && !cambioLocal))) traer = true;
     else if (m && cambioRemoto && cambioLocal) traer = !confirm(`Hay cambios guardados en Google Drive desde otro dispositivo${remoto ? ' (' + new Date(remoto).toLocaleString('es-AR') + ')' : ''} y también cambios en este.\n\nAceptar: quedarte con los de ESTE dispositivo (se pisan los de Drive).\nCancelar: traer los de Drive (se pierden los de acá).`);
     if (traer) {
       const data = await (await driveApi(`${DAPI}/files/${m.id}?alt=media`)).json();
@@ -3109,6 +3110,9 @@ initArchivo();
 bienvenida();
 mqCelu.addEventListener('change', () => render());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizarDrive(); });
+// Changes made on another device show up here too: check Drive when the window gets focus and every minute while it's visible.
+addEventListener('focus', () => sincronizarDrive());
+setInterval(() => { if (!document.hidden && !document.querySelector('.modal-bg')) sincronizarDrive(); }, 60000);
 </script>
 </body>
 </html>
