@@ -2808,7 +2808,9 @@ function backup() {
 async function restaurar(f) {
   if (!f) return;
   try {
-    const s = JSON.parse(await f.text());
+    const txt = await f.text();
+    if (!txt.trim()) throw new Error(`"${f.name}" está vacío: elegí la copia que bajaste o te mandaron`);
+    let s; try { s = JSON.parse(txt); } catch (e) { throw new Error(`"${f.name}" no es una copia de esta página (o se cortó al copiarlo)`); }
     if (!s.meses || !s.personas) throw new Error('no parece una copia de esta página');
     if (!confirm('Esto reemplaza todos los datos actuales por los de la copia. ¿Seguir?')) return;
     state = s; save(); refrescarConfig(); toast('Copia restaurada ✓');
