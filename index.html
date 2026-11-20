@@ -1515,7 +1515,8 @@ function render() {
 function bannerArchivo() {
   const d = bannerDrive();
   if (d && drive.estado === 'auth') return d;
-  if (fsSoportado && archivo.estado === 'permiso') return `<div class="banner warn">${ic('alert')}Para seguir guardando en tu archivo <b>${esc(archivo.handle.name)}</b> el navegador necesita tu permiso.
+  // With Drive connected the data is already safe: don't nag about an old local file link.
+  if (fsSoportado && archivo.estado === 'permiso' && drive.estado !== 'ok') return `<div class="banner warn">${ic('alert')}Para seguir guardando en tu archivo <b>${esc(archivo.handle.name)}</b> el navegador necesita tu permiso.
     <button class="small primary" onclick="reconectarArchivo()">Reconectar archivo</button></div>`;
   if (drive.estado === 'ok') return '';
   if (d) return d;   // online: Drive instead of a local file
