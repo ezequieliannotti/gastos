@@ -560,12 +560,9 @@ const DIVIDIDO = '_split';
 
 function defaultState() {
   return {
-    principal: 'eze',
+    principal: 'yo',
     dolar: 1450,
-    personas: [
-      { id: 'eze', nombre: 'Eze' }, { id: 'euge', nombre: 'Euge' }, { id: 'gi', nombre: 'Gi' },
-      { id: 'ari', nombre: 'Ari' }, { id: 'dani', nombre: 'Dani' }, { id: 'nadia', nombre: 'Nadia' }
-    ],
+    personas: [{ id: 'yo', nombre: 'Yo' }],   // a new user starts alone and is asked for their name
     // titular as it appears in the PDF (first + last word) -> persona id
     claves: {},
     meses: {},   // 'YYYY-MM' -> { dolar, resumenes: {Visa: meta, Mastercard: meta}, gastos: [], pagos: {} }
@@ -817,8 +814,13 @@ async function sincronizarDrive() {
       state = data;
       try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
       drive.remoto = state.actualizado || ''; drive.ultimo = new Date(); driveGuardarCfg();
-      programarEscritura(); render();
+      programarEscritura(); document.getElementById('bienv')?.remove(); render();
       if (Object.keys(state.meses).length) toast('☁️ Traje tus datos de Google Drive');
+    } else if (!m && !drive.remoto && hayDatos()) {
+      const r = await preguntarCuentaNueva();
+      if (r === 'subir') await driveSubir();
+      else if (r === 'vacio') { backup(); state = defaultState(); save(); drive.remoto = ''; await driveSubir(); ui.tab = 'resumen'; render(); bienvenida(); }
+      else soltarDrive();
     } else if (!m || cambioLocal) await driveSubir();
     else { drive.ultimo = new Date(); driveGuardarCfg(); }
   } catch (e) {
@@ -838,11 +840,38 @@ async function conectarDrive() {
   try { await pedirToken(drive.email ? '' : 'consent'); }
   catch (e) { toast('❌ ' + e.message, 7000); return; }
   drive.estado = 'ok'; drive.avisado = false;
-  if (!drive.email) try { drive.email = (await (await driveApi(`${DAPI}/about?fields=user(emailAddress)`)).json()).user.emailAddress; } catch (e) {}
+  try {
+    const email = (await (await driveApi(`${DAPI}/about?fields=user(emailAddress)`)).json()).user.emailAddress;
+    if (drive.email && email !== drive.email) { drive.fileId = null; drive.remoto = ''; }   // another Google account
+    drive.email = email;
+  } catch (e) {}
   driveGuardarCfg();
   document.getElementById('drv')?.remove();
   await sincronizarDrive();
   render();
+}
+const hayDatos = () => Object.keys(state.meses).length > 0 || (state.viajes || []).length > 0 || Object.keys(state.presu?.valores || {}).length > 0;
+// The account just connected has no data file and this device already has data: never copy it there without asking.
+function preguntarCuentaNueva() {
+  return new Promise(res => {
+    document.getElementById('cnueva')?.remove();
+    const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'cnueva';
+    const fin = r => { bg.remove(); res(r); };
+    bg.innerHTML = `<div class="modal" style="max-width:500px">
+      <h3>Esta cuenta de Google no tiene datos</h3>
+      <p><b>${esc(drive.email || 'La cuenta que conectaste')}</b> todavía no tiene gastos guardados, pero en este dispositivo sí hay datos.</p>
+      <p class="muted" style="font-size:13px">Si es la cuenta de otra persona, elegí <b>Empezar vacía</b>: antes te bajo una copia de lo que hay acá. Tus datos siguen en el Drive de tu cuenta de siempre.</p>
+      <div class="toolbar" style="margin:16px 0 0;flex-wrap:wrap"><button data-r="no">No conectar</button><span class="sp"></span>
+        <button data-r="vacio">Empezar vacía</button><button class="primary" data-r="subir">Subir mis datos a esta cuenta</button></div></div>`;
+    bg.onclick = e => { const b = e.target.closest('button[data-r]'); if (b) fin(b.dataset.r); else if (e.target === bg) fin('no'); };
+    document.body.appendChild(bg);
+  });
+}
+function soltarDrive() {
+  if (drive.token && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(drive.token, () => {});
+  Object.assign(drive, { estado: 'none', token: null, fileId: null, email: '', remoto: '', ultimo: null });
+  try { localStorage.removeItem(DRIVE_KEY); } catch (e) {}
+  toast('No conecté Drive: no se subió nada.');
 }
 function desconectarDrive() {
   if (!confirm('¿Dejar de guardar en Google Drive desde este dispositivo? El archivo queda en tu Drive.')) return;
@@ -2785,7 +2814,28 @@ async function restaurar(f) {
 }
 function resetTodo() {
   if (!confirm('¿Borrar TODOS los meses, personas y configuración? Esto no se puede deshacer (salvo que tengas una copia).')) return;
-  state = defaultState(); save(); ui.tab = 'resumen'; refrescarConfig();
+  state = defaultState(); save(); ui.tab = 'resumen'; refrescarConfig(); cerrarConfig(); bienvenida();
+}
+// First visit (nothing loaded, the starting person untouched): ask the name, or offer to bring the data from Drive.
+function esNuevo() { return !hayDatos() && state.personas.length === 1 && state.personas[0].nombre === 'Yo'; }
+function bienvenida() {
+  if (!esNuevo() || drive.estado === 'auth' || document.getElementById('bienv')) return;   // 'auth': the data is about to come from Drive
+  const traer = driveOnline && drive.estado === 'none';
+  const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'bienv';
+  bg.innerHTML = `<div class="modal" style="max-width:460px">
+    <h3>¡Hola! ¿Cómo te llamás?</h3>
+    <p class="muted" style="font-size:13px">Así separo tus gastos de los de las demás personas de la tarjeta. Después podés sumar a otros desde Configuración.</p>
+    <form data-enter onsubmit="event.preventDefault();guardarNombre()"><input type="text" id="bvNombre" placeholder="Tu nombre" autocomplete="given-name" style="width:100%"></form>
+    ${traer ? `<p class="muted" style="font-size:13px;margin:14px 0 0">¿Ya usás esta página en otro dispositivo? Conectá Google Drive y traigo tus datos.</p>` : ''}
+    <div class="toolbar" style="margin:16px 0 0;flex-wrap:wrap">${traer ? `<button onclick="document.getElementById('bienv').remove();conectarDrive()">${ic('cloud')}Traer de Drive</button>` : ''}<span class="sp"></span><button class="primary" onclick="guardarNombre()">Empezar</button></div></div>`;
+  document.body.appendChild(bg);
+  setTimeout(() => document.getElementById('bvNombre')?.focus(), 50);
+}
+function guardarNombre() {
+  const n = document.getElementById('bvNombre').value.trim();
+  if (!n) { toast('Escribí tu nombre.'); return; }
+  state.personas[0].nombre = n; save();
+  document.getElementById('bienv')?.remove(); render();
 }
 function descargar(blob, name) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
@@ -3056,6 +3106,7 @@ initDrive();
 render();
 renderArchivo();
 initArchivo();
+bienvenida();
 mqCelu.addEventListener('change', () => render());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizarDrive(); });
 </script>
