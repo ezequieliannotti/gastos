@@ -2672,7 +2672,8 @@ function renderViajes() {
         <button class="primary" type="submit">${ic('plus')}Anotar</button>
       </form></div>`;
 
-  const gs = v.gastos.slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
+  // newest day first; within a day, the one added last goes on top
+  const gs = v.gastos.map((g, i) => [g, i]).sort((a, b) => b[0].fecha.localeCompare(a[0].fecha) || b[1] - a[1]).map(x => x[0]);
   const original = g => [g.usd ? `U$S ${fmt.format(g.usd)} a ${$0(g.cotiz)}` : '', entreViaje(g) > 1 ? `${$0(montoEnteroViaje(g))} ÷ ${entreViaje(g)}` : ''].filter(Boolean).join(' · ');
   h += `<div class="card"><h2>Gastos del viaje <span class="sub">${gs.length ? 'Tocá un gasto para editarlo o borrarlo' : ''}</span></h2>`;
   if (!gs.length) h += '<p class="muted" style="margin:0">Todavía no anotaste gastos en este viaje.</p>';
