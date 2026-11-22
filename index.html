@@ -283,6 +283,13 @@ table.presu th .ghost { padding: 0 4px; font-size: 12px; }
 .mov { border-bottom: 1px solid var(--border); padding: 10px 0; }
 .mov.changed { background: var(--changed); margin: 0 -14px; padding: 10px 14px; }
 .mov.excl .mtop { opacity: .5; text-decoration: line-through; }
+[hidden] { display: none !important; }   /* inline display styles must not show hidden fields */
+.warn { color: var(--warn); }
+th.c, td.c { text-align: center; width: 1%; white-space: nowrap; }
+td.c input, .vpend input { width: 18px; height: 18px; accent-color: var(--warn); cursor: pointer; }
+.vpend { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); cursor: pointer; min-height: 32px; }
+.vpend:has(input:checked) { color: var(--warn); font-weight: 600; }
+.mov.tot { border-bottom: 0; font-weight: 650; }
 .mtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
 .mdesc { font-weight: 500; word-break: break-word; }
 .mamt { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -2556,7 +2563,8 @@ const montoViaje = g => montoEnteroViaje(g) / entreViaje(g);
 function totalViaje(v) {
   const usd = v.gastos.reduce((a, g) => a + (g.usd || 0) / entreViaje(g), 0);
   const usdPesos = v.gastos.reduce((a, g) => a + (g.usd || 0) * (g.cotiz || 0) / entreViaje(g), 0);
-  return { total: v.gastos.reduce((a, g) => a + montoViaje(g), 0), usd, usdPesos };
+  const falta = v.gastos.filter(g => g.pendiente);   // not paid yet: comes in a future card statement
+  return { total: v.gastos.reduce((a, g) => a + montoViaje(g), 0), usd, usdPesos, falta: falta.reduce((a, g) => a + montoViaje(g), 0), nFalta: falta.length };
 }
 const diasViaje = v => v.desde && v.hasta && v.hasta >= v.desde ? Math.round((new Date(v.hasta) - new Date(v.desde)) / 864e5) + 1 : null;
 const viajesOrden = () => state.viajes.slice().sort((a, b) => (b.desde || '').localeCompare(a.desde || ''));
@@ -2635,15 +2643,15 @@ function leerGastoViaje(c) {
   if (usd && (cotiz === null || Number.isNaN(cotiz) || cotiz <= 0)) { toast('Poné a cuánto pagaste el dólar, por ejemplo 1450.'); c.cotiz.focus(); return null; }
   const entre = c.entre.value.trim() === '' ? 1 : Number(c.entre.value);
   if (!Number.isInteger(entre) || entre < 1 || entre > 50) { toast('Poné entre cuántas personas se divide: 1 si es solo tuyo.'); c.entre.focus(); return null; }
-  return { fecha: c.fecha.value || hoyISO(), desc, cat: c.cat.value, pesos: usd ? 0 : monto, usd: usd ? monto : 0, cotiz: usd ? cotiz : 0, entre };
+  return { fecha: c.fecha.value || hoyISO(), desc, cat: c.cat.value, pesos: usd ? 0 : monto, usd: usd ? monto : 0, cotiz: usd ? cotiz : 0, entre, pendiente: !!c.pend?.checked };
 }
 function agregarGastoViaje() {
   const f = document.getElementById('vform'), v = viajeActual();
-  const g = leerGastoViaje({ fecha: f.fecha, desc: f.desc, cat: f.cat, mon: f.mon, monto: f.monto, cotiz: f.cotiz, entre: f.entre });
+  const g = leerGastoViaje({ fecha: f.fecha, desc: f.desc, cat: f.cat, mon: f.mon, monto: f.monto, cotiz: f.cotiz, entre: f.entre, pend: f.pend });
   if (!g) return;
   v.gastos.push({ id: uid(), ...g });
   v.entre = g.entre;   // the next expense of this trip starts with the same number of people
-  ui.vform = { fecha: g.fecha, cat: g.cat, mon: f.mon.value };
+  ui.vform = { fecha: g.fecha, cat: g.cat, mon: f.mon.value, pend: g.pendiente };   // "falta pagar" stays ticked for the next one
   save(); render();
   toast(`✓ Anotado: ${g.desc} ${$(montoViaje(g))}${g.entre > 1 ? ` (tu parte de ${$(montoEnteroViaje(g))})` : ''}`);
   document.querySelector('#vform [name=desc]')?.focus();
@@ -2668,6 +2676,7 @@ function abrirGastoViaje(gid) {
       <label>Monto<input type="text" inputmode="decimal" id="vgMonto" value="${fmtCelda(usd ? g.usd : g.pesos)}"></label>
       <label id="vgCotizBox" ${usd ? '' : 'hidden'}>Lo pagué a $<input type="text" inputmode="decimal" id="vgCotiz" value="${g.cotiz ? fmtCelda(g.cotiz) : cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}"></label>
       <label>Dividido entre (personas)<input type="number" min="1" max="50" step="1" inputmode="numeric" id="vgEntre" value="${entreViaje(g)}"></label>
+      <label style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="vgPend" ${g.pendiente ? 'checked' : ''}>Falta pagar (viene en un resumen)</label>
     </div>
     <div class="toolbar" style="margin:16px 0 0"><button class="danger" onclick="borrarGastoViaje('${g.id}')">${ic('x')}Borrar</button><span class="sp"></span>
       <button onclick="document.getElementById('vgasto').remove()">Cancelar</button><button class="primary" onclick="guardarGastoViaje('${g.id}')">Guardar</button></div>
@@ -2677,12 +2686,17 @@ function abrirGastoViaje(gid) {
 function guardarGastoViaje(gid) {
   const v = viajeActual(), g = v.gastos.find(x => x.id === gid);
   const $id = id => document.getElementById(id);
-  const n = leerGastoViaje({ fecha: $id('vgFecha'), desc: $id('vgDesc'), cat: $id('vgCat'), mon: $id('vgMon'), monto: $id('vgMonto'), cotiz: $id('vgCotiz'), entre: $id('vgEntre') });
+  const n = leerGastoViaje({ fecha: $id('vgFecha'), desc: $id('vgDesc'), cat: $id('vgCat'), mon: $id('vgMon'), monto: $id('vgMonto'), cotiz: $id('vgCotiz'), entre: $id('vgEntre'), pend: $id('vgPend') });
   if (!n) return;
   Object.assign(g, n);
   $id('vgasto').remove();
   save(); render();
   toast('✓ Gasto actualizado');
+}
+function pendienteViaje(gid, on) {
+  const g = viajeActual().gastos.find(x => x.id === gid);
+  if (on) g.pendiente = true; else delete g.pendiente;
+  save(); render();
 }
 function borrarGastoViaje(gid) {
   const v = viajeActual(), g = v.gastos.find(x => x.id === gid);
@@ -2704,8 +2718,8 @@ function renderViajes() {
       <button class="ghost" onclick="abrirViaje('${v.id}')">${ic('pencil')}Editar viaje</button><span class="sp"></span>
       <button class="primary" onclick="abrirViaje()">${ic('plus')}Nuevo viaje</button></div>
     <div class="hero">
-      <div class="stat me"><div class="lbl">Lo que gasté en el viaje</div><div class="val">${$0(t.total)}</div><div class="hint">${v.gastos.length} gasto${v.gastos.length === 1 ? '' : 's'} · ${rangoViaje(v)}</div></div>
-      <div class="stat"><div class="lbl">Pagado en dólares</div>${t.usd ? `<div class="val">U$S ${fmt.format(t.usd)}</div><div class="hint">Te costó ${$0(t.usdPesos)}</div>` : '<div class="val muted">—</div><div class="hint">Sin gastos en dólares</div>'}</div>
+      <div class="stat me"><div class="lbl">Lo que gasté en el viaje</div><div class="val">${$0(t.total)}</div><div class="hint">${v.gastos.length} gasto${v.gastos.length === 1 ? '' : 's'} · ${rangoViaje(v)}${t.usd ? ` · U$S ${fmt.format(t.usd)} pagados en dólares` : ''}</div></div>
+      <div class="stat"><div class="lbl">Me falta pagar</div>${t.nFalta ? `<div class="val warn">${$0(t.falta)}</div><div class="hint">${t.nFalta} gasto${t.nFalta === 1 ? '' : 's'} sin pagar · ya pagué ${$0(t.total - t.falta)}</div>` : `<div class="val">$ 0</div><div class="hint">Tildá "Falta pagar" en lo que viene en el próximo resumen</div>`}</div>
       <div class="stat"><div class="lbl">Por día</div>${dias ? `<div class="val">${$0(t.total / dias)}</div><div class="hint">${dias} día${dias === 1 ? '' : 's'}</div>` : '<div class="val muted">—</div><div class="hint">Poné la fecha de vuelta para calcularlo</div>'}</div>
       <div class="stat"><div class="lbl">En dólares (aprox.)</div>${v.dolar ? `<div class="val">U$S ${fmt0.format(Math.round(t.total / v.dolar))}</div><div class="hint">Al dólar de referencia de ${$0(v.dolar)}</div>` : '<div class="val muted">—</div><div class="hint">Cargá el dólar de referencia del viaje</div>'}</div>
     </div>
@@ -2718,6 +2732,7 @@ function renderViajes() {
         <input type="text" name="monto" aria-label="Monto" placeholder="Monto" inputmode="decimal" enterkeyhint="done" style="width:120px">
         <label id="vCotiz" ${mon === 'usd' ? '' : 'hidden'} style="display:inline-flex;align-items:center;gap:6px">a $<input type="text" name="cotiz" aria-label="Cotización del dólar" inputmode="decimal" value="${cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}" style="width:90px"></label>
         <label style="display:inline-flex;align-items:center;gap:6px" title="Entre cuántas personas se divide: se anota solo tu parte">÷<input type="number" name="entre" min="1" max="50" step="1" inputmode="numeric" aria-label="Dividido entre cuántas personas" value="${v.entre || 1}" style="width:64px">personas</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="Todavía no lo pagaste: viene en el próximo resumen de la tarjeta"><input type="checkbox" name="pend" ${vf.pend ? 'checked' : ''}>Falta pagar</label>
         <span id="vParte" class="paid" aria-live="polite"></span>
         <button class="primary" type="submit">${ic('plus')}Anotar</button>
       </form></div>`;
@@ -2729,11 +2744,15 @@ function renderViajes() {
   if (!gs.length) h += '<p class="muted" style="margin:0">Todavía no anotaste gastos en este viaje.</p>';
   else if (celu) h += gs.map(g => `<div class="mov" role="button" tabindex="0" onclick="abrirGastoViaje('${g.id}')" onkeydown="if(event.key==='Enter')abrirGastoViaje('${g.id}')">
       <div class="mtop"><span class="mdesc">${esc(g.desc)}</span><b class="mamt">${$(montoViaje(g))}</b></div>
-      <div class="mmeta">${fechaCorta(g.fecha)} · ${esc(g.cat)}${original(g) ? ' · ' + original(g) : ''}</div></div>`).join('');
-  else h += `<div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Qué fue</th><th>Categoría</th><th class="n">Detalle</th><th class="n">Mi parte $</th></tr></thead><tbody>
+      <div class="mmeta">${fechaCorta(g.fecha)} · ${esc(g.cat)}${original(g) ? ' · ' + original(g) : ''}</div>
+      <label class="vpend" onclick="event.stopPropagation()"><input type="checkbox" ${g.pendiente ? 'checked' : ''} onchange="pendienteViaje('${g.id}',this.checked)">Falta pagar</label></div>`).join('')
+      + `<div class="mov tot"><div class="mtop"><span class="mdesc">Total</span><b class="mamt">${$(t.total)}</b></div>${t.nFalta ? `<div class="mmeta">Me falta pagar <b class="warn">${$(t.falta)}</b></div>` : ''}</div>`;
+  else h += `<div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Qué fue</th><th>Categoría</th><th class="n">Detalle</th><th class="n">Mi parte $</th><th class="c">Falta pagar</th></tr></thead><tbody>
       ${gs.map(g => `<tr><td class="pc"><button class="small ghost pencil" aria-label="Editar ${esc(g.desc)}" onclick="abrirGastoViaje('${g.id}')">${ic('pencil')}</button></td>
-        <td>${fechaCorta(g.fecha)}</td><td class="desc">${esc(g.desc)}</td><td>${esc(g.cat)}</td><td class="n muted">${original(g)}</td><td class="n"><b>${$(montoViaje(g))}</b></td></tr>`).join('')}
-      <tr class="tot"><td></td><td colspan="4">Total</td><td class="n">${$(t.total)}</td></tr></tbody></table></div>`;
+        <td>${fechaCorta(g.fecha)}</td><td class="desc">${esc(g.desc)}</td><td>${esc(g.cat)}</td><td class="n muted">${original(g)}</td><td class="n"><b>${$(montoViaje(g))}</b></td>
+        <td class="c"><input type="checkbox" ${g.pendiente ? 'checked' : ''} aria-label="Falta pagar ${esc(g.desc)}" onchange="pendienteViaje('${g.id}',this.checked)"></td></tr>`).join('')}
+      <tr class="tot"><td></td><td colspan="4">Total</td><td class="n">${$(t.total)}</td><td></td></tr>
+      ${t.nFalta ? `<tr class="tot"><td></td><td colspan="4">Me falta pagar</td><td class="n warn">${$(t.falta)}</td><td></td></tr>` : ''}</tbody></table></div>`;
   h += '</div>';
   if (gs.length) h += `<div class="charts">
       <div class="card"><h2>Por categoría</h2><div class="chartbox"><canvas id="chVCat"></canvas></div></div>
