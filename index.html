@@ -807,9 +807,17 @@ async function sincronizarDrive() {
     let traer = false;
     // first sync of an empty device: bring Drive's copy. (Not just "no months": an account without months yet would lose every edit.)
     if (m && ((!drive.remoto && !hayDatos()) || (cambioRemoto && !cambioLocal))) traer = true;
-    else if (m && cambioRemoto && cambioLocal) traer = !confirm(`Hay cambios guardados en Google Drive desde otro dispositivo${remoto ? ' (' + new Date(remoto).toLocaleString('es-AR') + ')' : ''} y también cambios en este.\n\nAceptar: quedarte con los de ESTE dispositivo (se pisan los de Drive).\nCancelar: traer los de Drive (se pierden los de acá).`);
+    let bajado = null;
+    if (m && cambioRemoto && cambioLocal) {   // both sides changed: show what each copy has and let the user pick
+      bajado = await (await driveApi(`${DAPI}/files/${m.id}?alt=media`)).json();
+      if (!bajado || !bajado.meses || !bajado.personas) throw new Error('el archivo de Drive no tiene datos válidos');
+      const usar = await elegirCopia(state, bajado);
+      if ((state.actualizado || '') !== local) { drivePendiente = true; throw new Error('cambios'); }
+      guardarDescartada(usar === 'drive' ? state : bajado);
+      traer = usar === 'drive';
+    }
     if (traer) {
-      const data = await (await driveApi(`${DAPI}/files/${m.id}?alt=media`)).json();
+      const data = bajado || await (await driveApi(`${DAPI}/files/${m.id}?alt=media`)).json();
       if (!data || !data.meses || !data.personas) throw new Error('el archivo de Drive no tiene datos válidos');
       if ((state.actualizado || '') !== local) { drivePendiente = true; throw new Error('cambios'); }
       state = data;
@@ -850,6 +858,45 @@ async function conectarDrive() {
   document.getElementById('drv')?.remove();
   await sincronizarDrive();
   render();
+}
+// ===== Conflict between this device and Drive =====
+const DESCARTADA_KEY = 'gastosTarjetas.descartada';
+function resumenCopia(d) {
+  const ms = Object.keys(d.meses || {}).sort();
+  return { ultimo: ms[ms.length - 1] || '', n: ms.length, act: d.actualizado || '' };
+}
+function textoCopia(r) {
+  return `${r.ultimo ? 'Resúmenes hasta <b>' + mesNombre(r.ultimo) + '</b>' : '<b>Sin resúmenes</b>'} · ${r.n} ${r.n === 1 ? 'mes' : 'meses'}` +
+    (r.act ? `<br><span style="opacity:.8">Último cambio: ${new Date(r.act).toLocaleString('es-AR', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>` : '');
+}
+// Recommended copy: the one with the latest statement, then more months, then the latest change.
+function copiaRecomendada(a, b) {
+  return a.ultimo !== b.ultimo ? (a.ultimo > b.ultimo ? 'local' : 'drive') : a.n !== b.n ? (a.n > b.n ? 'local' : 'drive') : (a.act >= b.act ? 'local' : 'drive');
+}
+function elegirCopia(local, remoto) {
+  return new Promise(res => {
+    document.getElementById('copias')?.remove();
+    const rl = resumenCopia(local), rd = resumenCopia(remoto), rec = copiaRecomendada(rl, rd);
+    const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'copias';
+    const op = (k, titulo, r) => `<button class="${k === rec ? 'primary' : ''}" data-r="${k}" style="display:block;width:100%;text-align:left;margin-top:10px;padding:12px 14px;line-height:1.45;height:auto">
+      <b>${titulo}</b>${k === rec ? ' · recomendada' : ''}<br>${textoCopia(r)}</button>`;
+    bg.innerHTML = `<div class="modal" style="max-width:480px">
+      <h3>¿Con qué datos te quedás?</h3>
+      <p class="muted" style="font-size:13px">Se cambiaron datos en este dispositivo y también en otro. Elegí cuál copia usar; la otra queda guardada y la podés recuperar desde Configuración.</p>
+      ${op('drive', 'La de Google Drive', rd)}${op('local', 'La de este dispositivo', rl)}</div>`;
+    bg.onclick = e => { const b = e.target.closest('button[data-r]'); if (b) { bg.remove(); res(b.dataset.r); } };
+    document.body.appendChild(bg);
+  });
+}
+function guardarDescartada(d) {
+  try { localStorage.setItem(DESCARTADA_KEY, JSON.stringify({ fecha: new Date().toISOString(), data: d })); } catch (e) {}
+}
+function leerDescartada() { try { return JSON.parse(localStorage.getItem(DESCARTADA_KEY)); } catch (e) { return null; } }
+function recuperarDescartada() {
+  const x = leerDescartada();
+  if (!x || !x.data) return;
+  if (!confirm('Esto reemplaza los datos actuales por la copia que se descartó. Los actuales quedan guardados como descartados, por si te arrepentís. ¿Seguir?')) return;
+  const actual = state; state = x.data; guardarDescartada(actual); save(); refrescarConfig(); toast('Copia recuperada ✓');
 }
 const hayDatos = () => Object.keys(state.meses).length > 0 || (state.viajes || []).length > 0 || Object.keys(state.presu?.valores || {}).length > 0;
 // The account just connected has no data file and this device already has data: never copy it there without asking.
@@ -2777,6 +2824,7 @@ function abrirConfig() {
       <button onclick="backup()">${ic('download')}Descargar copia (.json)</button>
       <button onclick="document.getElementById('restore').click()">${ic('upload')}Restaurar copia</button>
       <input type="file" id="restore" accept=".json" hidden onchange="restaurar(this.files[0])">
+      ${(d => d && d.data ? `<button onclick="recuperarDescartada()" title="${esc(textoCopia(resumenCopia(d.data)).replace(/<[^>]+>/g, ''))}">${ic('upload')}Recuperar copia descartada (${new Date(d.fecha).toLocaleDateString('es-AR')})</button>` : '')(leerDescartada())}
       <span class="sp"></span><button class="danger" onclick="resetTodo()">Borrar todo</button>
     </div>
     <div style="text-align:right;margin-top:18px"><button class="primary" onclick="cerrarConfig()">Listo</button></div>
@@ -2817,7 +2865,7 @@ async function restaurar(f) {
     let s; try { s = JSON.parse(txt); } catch (e) { throw new Error(`"${f.name}" no es una copia de esta página (o se cortó al copiarlo)`); }
     if (!s.meses || !s.personas) throw new Error('no parece una copia de esta página');
     if (!confirm('Esto reemplaza todos los datos actuales por los de la copia. ¿Seguir?')) return;
-    state = s; save(); refrescarConfig(); toast('Copia restaurada ✓');
+    guardarDescartada(state); state = s; save(); refrescarConfig(); toast('Copia restaurada ✓');
   } catch (e) { toast('❌ ' + e.message); }
 }
 function resetTodo() {
