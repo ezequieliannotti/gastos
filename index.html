@@ -2232,7 +2232,8 @@ document.addEventListener('keydown', e => {
   }
 });
 function aniosPresu() {
-  const ys = new Set([new Date().getFullYear()]);
+  const hoy = new Date();
+  const ys = new Set([hoy.getFullYear(), new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1).getFullYear()]);   // in December, next year too
   Object.keys(state.meses).concat(Object.keys(state.presu.valores)).forEach(k => ys.add(+k.slice(0, 4)));
   return [...ys].sort();
 }
@@ -2289,8 +2290,8 @@ function copiarMesAnterior(k) {
 function mesesPresu() {
   const vista = ui.presuVista || 'ult8';
   if (vista !== 'ult8') return Array.from({ length: 12 }, (_, i) => mesKey(+vista, i + 1));
-  const hoy = new Date();
-  let fin = mesKey(hoy.getFullYear(), hoy.getMonth() + 1);
+  const hoy = new Date(), prox = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1);
+  let fin = mesKey(prox.getFullYear(), prox.getMonth() + 1);   // up to next month, to plan ahead
   const ultimo = mesesOrden().slice(-1)[0];
   if (ultimo && ultimo > fin) fin = ultimo;
   const [fy, fm] = fin.split('-').map(Number);
@@ -2307,7 +2308,7 @@ function renderPresu() {
   const tots = Object.fromEntries(ks.map(k => [k, totalesPresu(k)]));
   const conDatos = ks.filter(k => tots[k].hay);
   const kAct = mesKey(hoy.getFullYear(), hoy.getMonth() + 1);
-  const kHero = ks.includes(kAct) ? kAct : (conDatos[conDatos.length - 1] || ks[0]);
+  const kHero = ks.includes(ui.presuHero) ? ui.presuHero : ks.includes(kAct) ? kAct : (conDatos[conDatos.length - 1] || ks[0]);
   const th = tots[kHero];
   const prom = arr => { const v = arr.filter(x => x); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
   const signo = v => `<span class="${v < 0 ? 'bad' : 'ok'}">${v < 0 ? '−' : ''}$ ${fmt0.format(Math.abs(Math.round(v)))}</span>`;
@@ -2316,6 +2317,8 @@ function renderPresu() {
     <label>Ver: <select onchange="ui.presuVista=this.value;render()">
       <option value="ult8" ${vista === 'ult8' ? 'selected' : ''}>Últimos 8 meses</option>
       ${anios.map(a => `<option value="${a}" ${String(vista) === String(a) ? 'selected' : ''}>Año ${a}</option>`).join('')}</select></label>
+    <label>Resumen de: <select onchange="ui.presuHero=this.value;render()">
+      ${ks.map(k => `<option value="${k}" ${k === kHero ? 'selected' : ''}>${mesNombre(k)}</option>`).join('')}</select></label>
     <span class="sp"></span>
     <input type="file" id="xlsIn" accept=".xlsx" hidden onchange="importarExcel(this.files[0]);this.value=''">
     <button onclick="document.getElementById('xlsIn').click()">${ic('upload')}Importar de mi Excel</button>
