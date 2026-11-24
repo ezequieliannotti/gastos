@@ -1788,6 +1788,7 @@ const esCelu = () => mqCelu.matches;
 // Ingresos y gastos on a phone: one month at a time.
 function renderPresuCelu() {
   const hoy = new Date();
+  if (ui.presuVista && ui.presuVista !== 'ult8' && !aniosPresu().includes(+ui.presuVista)) ui.presuVista = 'ult8';
   const kAct = mesKey(hoy.getFullYear(), hoy.getMonth() + 1);
   const ult = mesesOrden().slice(-1)[0];
   const k = ui.presuMes || (ult && ult > kAct ? ult : kAct);
@@ -1820,8 +1821,11 @@ function renderPresuCelu() {
   h += `<div class="lrow lqueda"><span>Me queda</span>${signo(t.queda)}</div>
     <div class="toolbar" style="margin:14px 0 0"><button onclick="copiarMesAnterior('${k}')">⇠ Copiar lo que falte de ${mesNombre(otro(-1))}</button></div>
     <p class="muted" style="font-size:12.5px;margin:10px 0 0">Las tarjetas (en azul) se completan solas con tu parte del resumen; si escribís un valor, se usa el tuyo. Elegí una categoría en tus gastos para verlos en Estadísticas. Para renombrar, ordenar o borrar filas usá la compu.</p></div>
-  <div class="card"><h2>Ingresos vs. egresos <span class="sub">últimos meses · egresos = gastos + ahorro · el % es la parte de cada ingreso</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
-  ${cardsAhorro()}`;
+  <div class="card"><h2>Ingresos vs. egresos <span class="sub">egresos = gastos + ahorro · el % es la parte de cada ingreso</span></h2>
+    <div class="toolbar" style="margin:0 0 12px"><label>Ver: <select onchange="ui.presuVista=this.value;render()"><option value="ult8">Últimos 8 meses</option>
+      ${aniosPresu().map(a => `<option value="${a}" ${String(ui.presuVista) === String(a) ? 'selected' : ''}>Año ${a}</option>`).join('')}</select></label></div>
+    <div class="tablewrap"><div class="chartbox" ${(ui.presuVista || 'ult8') !== 'ult8' ? 'style="min-width:520px"' : ''}><canvas id="chPresu"></canvas></div></div></div>
+  ${cardIngresos()}${cardsAhorro()}`;
   return h;
 }
 // Movements of a month as cards.
@@ -2417,7 +2421,7 @@ function renderPresu() {
     <tr class="sub"><td>Acumulado ${vista === 'ult8' ? 'de los 8 meses' : 'del año'}</td>${acum.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td></td><td></td></tr>`;
   h += `</tbody></table></div></div>
   <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">egresos = gastos + ahorro · el % es la parte de cada ingreso</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
-  ${cardsAhorro()}`;
+  ${cardIngresos()}${cardsAhorro()}`;
   return h;
 }
 // Savings history: every month from the first entry to the last one, whatever months the grid shows.
@@ -2460,6 +2464,20 @@ function tintaSobre(hex) {
   const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
   return .2126 * r + .7152 * g + .0722 * b > .179 ? '#0b0b0f' : '#ffffff';
 }
+// Share of each income, every month from the first to the last one with income (whatever months the grid shows).
+function evolucionIngresos() {
+  const filas = state.presu.filas.filter(f => f.tipo === 'ingreso');
+  const con = Object.keys(state.presu.valores).filter(k => filas.some(f => valorPresu(k, f))).sort();
+  if (con.length < 2) return null;
+  const [y, m] = con[0].split('-').map(Number), ks = [];
+  for (let i = 0; !ks.length || ks[ks.length - 1] < con[con.length - 1]; i++) { const d = new Date(y, m - 1 + i, 1); ks.push(mesKey(d.getFullYear(), d.getMonth() + 1)); }
+  const series = serieIngresos(ks);
+  return series.length > 1 ? { ks, series } : null;
+}
+function cardIngresos() {
+  const e = evolucionIngresos();
+  return e ? `<div class="card"><h2>Cómo cambia el % de cada ingreso <span class="sub">mes a mes, de ${mesNombre(e.ks[0])} a ${mesNombre(e.ks[e.ks.length - 1])}</span></h2><div class="chartbox"><canvas id="chIngPct"></canvas></div></div>` : '';
+}
 const txtPct = p => p > 0 && p < 1 ? '<1%' : p > 99 && p < 100 ? '>99%' : Math.round(p) + '%';
 // Writes each income's % inside its segment (turned sideways on thin bars; skipped where it doesn't fit).
 const pctEnBarras = { id: 'pctEnBarras', afterDatasetsDraw(ch) {
@@ -2500,6 +2518,18 @@ function dibujarPresu() {
           callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}${c.dataset.pct ? ' (' + txtPct(c.dataset.pct[c.dataIndex]) + ')' : ''}`, footer: i => !i.length ? '' : (varios ? ['Total ingresos: ' + money(tots[i[0].dataIndex].ingreso)] : []).concat('Me queda: ' + money(tots[i[0].dataIndex].queda)) } } },
       scales: { x: { stacked: true, grid: { display: false }, border: { color: grid } },
         y: { stacked: true, grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k' } } } }
+  }));
+  const ev = evolucionIngresos();
+  if (ev && document.getElementById('chIngPct')) charts.push(new Chart(document.getElementById('chIngPct'), {
+    type: 'line',
+    data: { labels: ev.ks.map(mesCorto), datasets: ev.series.map(x => ({ label: x.nombre, plata: x.data,
+      data: x.pct.map((p, i) => ev.series.some(y => y.data[i]) ? p : null),   // a month with no income is a gap, not 0%
+      borderColor: cssVar(x.color), backgroundColor: cssVar(x.color), borderWidth: 2, pointRadius: ev.ks.length > 18 ? 0 : 4, pointHoverRadius: 6, pointBorderColor: surface, pointBorderWidth: 2 })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text } },
+        tooltip: { ...globoChart(), callbacks: { label: c => ` ${c.dataset.label}: ${txtPct(c.parsed.y)} (${money(c.dataset.plata[c.dataIndex])})` } } },
+      scales: { x: { grid: { display: false }, border: { color: grid } },
+        y: { grid: { color: grid }, border: { display: false }, min: 0, max: 100, ticks: { stepSize: 25, callback: v => v + '%' } } } }
   }));
   const a = serieAhorro();
   if (!a || !document.getElementById('chAhoAcum')) return;
