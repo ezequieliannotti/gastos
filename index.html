@@ -1821,7 +1821,7 @@ function renderPresuCelu() {
   h += `<div class="lrow lqueda"><span>Me queda</span>${signo(t.queda)}</div>
     <div class="toolbar" style="margin:14px 0 0"><button onclick="copiarMesAnterior('${k}')">⇠ Copiar lo que falte de ${mesNombre(otro(-1))}</button></div>
     <p class="muted" style="font-size:12.5px;margin:10px 0 0">Las tarjetas (en azul) se completan solas con tu parte del resumen; si escribís un valor, se usa el tuyo. Elegí una categoría en tus gastos para verlos en Estadísticas. Para renombrar, ordenar o borrar filas usá la compu.</p></div>
-  <div class="card"><h2>Ingresos vs. egresos <span class="sub">el ahorro va apilado sobre los egresos · el % es la parte de cada ingreso</span></h2>
+  <div class="card"><h2>Ingresos vs. egresos <span class="sub">egresos = gastos + ahorro · el % es la parte de cada ingreso</span></h2>
     <div class="toolbar" style="margin:0 0 12px"><label>Ver: <select onchange="ui.presuVista=this.value;render()"><option value="ult8">Últimos 8 meses</option>
       ${aniosPresu().map(a => `<option value="${a}" ${String(ui.presuVista) === String(a) ? 'selected' : ''}>Año ${a}</option>`).join('')}</select></label></div>
     <div class="tablewrap"><div class="chartbox" ${(ui.presuVista || 'ult8') !== 'ult8' ? 'style="min-width:520px"' : ''}><canvas id="chPresu"></canvas></div></div></div>
@@ -2420,7 +2420,7 @@ function renderPresu() {
   h += `<tr class="queda"><td>Me queda</td>${q.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td class="n">${signo(q.reduce((a, b) => a + (b || 0), 0))}</td><td class="n">${signo(prom(q.map(v => v || 0)))}</td></tr>
     <tr class="sub"><td>Acumulado ${vista === 'ult8' ? 'de los 8 meses' : 'del año'}</td>${acum.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td></td><td></td></tr>`;
   h += `</tbody></table></div></div>
-  <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">el ahorro va apilado sobre los egresos · el % es la parte de cada ingreso</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
+  <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">egresos = gastos + ahorro · el % es la parte de cada ingreso</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
   ${cardIngresos()}${cardsAhorro()}`;
   return h;
 }
@@ -2508,7 +2508,7 @@ function dibujarPresu() {
     data: { labels: ks.map(mesCorto), datasets: [
       ...(varios ? ing.map(x => ({ label: x.nombre, data: x.data, pct: x.pct, pctTotal: x.pctTotal, stack: 'ing', backgroundColor: cssVar(x.color), borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, borderSkipped: false, maxBarThickness: 40 }))
         : [{ label: ing.length ? ing[0].nombre : 'Ingresos', data: tots.map(t => t.ingreso), stack: 'ing', backgroundColor: cssVar(ing.length ? ing[0].color : '--s1'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 40 }]),
-      { label: 'Egresos', data: tots.map(t => t.gasto), stack: 'egr', backgroundColor: cssVar('--s2'), ...(hayAhorro ? { borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, borderSkipped: false } : { borderRadius: 4, borderSkipped: 'start' }), maxBarThickness: 40 },
+      { label: 'Gastos', data: tots.map(t => t.gasto), stack: 'egr', backgroundColor: cssVar('--s2'), ...(hayAhorro ? { borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, borderSkipped: false } : { borderRadius: 4, borderSkipped: 'start' }), maxBarThickness: 40 },
       ...(hayAhorro ? [{ label: 'Ahorro', data: tots.map(t => t.ahorro), esAhorro: true, stack: 'egr', backgroundColor: cssVar('--ahorro'), borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, borderSkipped: false, maxBarThickness: 40 }] : [])] },
     plugins: varios ? [pctEnBarras] : [],
     options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
@@ -2516,7 +2516,7 @@ function dibujarPresu() {
         generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).map(l => { const d = ch.data.datasets[l.datasetIndex]; l.lineWidth = 0; if (d.pct) l.text += ' · ' + txtPct(d.pctTotal); return l; }) } },
         tooltip: { ...globoChart(),
           filter: i => !(i.dataset.pct || i.dataset.esAhorro) || i.parsed.y !== 0,
-          callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}${c.dataset.pct ? ' (' + txtPct(c.dataset.pct[c.dataIndex]) + ')' : ''}`, footer: i => !i.length ? '' : (varios ? ['Total ingresos: ' + money(tots[i[0].dataIndex].ingreso)] : []).concat('Me queda: ' + money(tots[i[0].dataIndex].queda)) } } },
+          callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}${c.dataset.pct ? ' (' + txtPct(c.dataset.pct[c.dataIndex]) + ')' : ''}`, footer: i => !i.length ? '' : (varios ? ['Total ingresos: ' + money(tots[i[0].dataIndex].ingreso)] : []).concat(hayAhorro ? 'Total egresos: ' + money(tots[i[0].dataIndex].gasto + tots[i[0].dataIndex].ahorro) : []).concat('Me queda: ' + money(tots[i[0].dataIndex].queda)) } } },
       scales: { x: { stacked: true, grid: { display: false }, border: { color: grid } },
         y: { stacked: true, grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k' } } } }
   }));
