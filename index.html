@@ -1820,7 +1820,7 @@ function renderPresuCelu() {
   h += `<div class="lrow lqueda"><span>Me queda</span>${signo(t.queda)}</div>
     <div class="toolbar" style="margin:14px 0 0"><button onclick="copiarMesAnterior('${k}')">⇠ Copiar lo que falte de ${mesNombre(otro(-1))}</button></div>
     <p class="muted" style="font-size:12.5px;margin:10px 0 0">Las tarjetas (en azul) se completan solas con tu parte del resumen; si escribís un valor, se usa el tuyo. Elegí una categoría en tus gastos para verlos en Estadísticas. Para renombrar, ordenar o borrar filas usá la compu.</p></div>
-  <div class="card"><h2>Ingresos vs. egresos <span class="sub">últimos meses · egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
+  <div class="card"><h2>Ingresos vs. egresos <span class="sub">últimos meses · egresos = gastos + ahorro · el % es la parte de cada ingreso</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
   ${cardsAhorro()}`;
   return h;
 }
@@ -2416,7 +2416,7 @@ function renderPresu() {
   h += `<tr class="queda"><td>Me queda</td>${q.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td class="n">${signo(q.reduce((a, b) => a + (b || 0), 0))}</td><td class="n">${signo(prom(q.map(v => v || 0)))}</td></tr>
     <tr class="sub"><td>Acumulado ${vista === 'ult8' ? 'de los 8 meses' : 'del año'}</td>${acum.map(v => `<td class="n">${v === null ? '<span class="muted">—</span>' : signo(v)}</td>`).join('')}<td></td><td></td></tr>`;
   h += `</tbody></table></div></div>
-  <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">egresos = gastos + ahorro</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
+  <div class="card"><h2>Ingresos vs. egresos · ${y} <span class="sub">egresos = gastos + ahorro · el % es la parte de cada ingreso</span></h2><div class="chartbox"><canvas id="chPresu"></canvas></div></div>
   ${cardsAhorro()}`;
   return h;
 }
@@ -2440,6 +2440,42 @@ function cardsAhorro() {
     <div class="card"><h2>Ahorro por mes <span class="sub">lo que separaste cada mes</span></h2><div class="chartbox"><canvas id="chAhoMes"></canvas></div></div>
   </div>`;
 }
+// Income split by its rows for the chart. Colour follows the row (not its size); from the 6th on they fold into "Otros ingresos".
+const COLORES_INGRESO = ['--s1', '--s3', '--s4', '--s5', '--s7'];   // --s2 is taken by "Egresos"
+function serieIngresos(ks) {
+  const filas = state.presu.filas.filter(f => f.tipo === 'ingreso'), n = COLORES_INGRESO.length;
+  const series = filas.slice(0, n).map((f, i) => ({ nombre: f.nombre, color: COLORES_INGRESO[i], data: ks.map(k => valorPresu(k, f)) }));
+  const resto = filas.slice(n);
+  if (resto.length) series.push({ nombre: resto.length === 1 ? resto[0].nombre : 'Otros ingresos', color: '--s-other', data: ks.map(k => resto.reduce((a, f) => a + valorPresu(k, f), 0)) });
+  const con = series.filter(x => x.data.some(v => v !== 0));
+  const totMes = ks.map((k, i) => con.reduce((a, x) => a + x.data[i], 0)), total = totMes.reduce((a, b) => a + b, 0);
+  for (const x of con) {
+    x.pct = x.data.map((v, i) => totMes[i] > 0 ? v / totMes[i] * 100 : 0);
+    x.pctTotal = total > 0 ? x.data.reduce((a, b) => a + b, 0) / total * 100 : 0;
+  }
+  return con;
+}
+// Dark or white text, whichever reads better on a #rrggbb fill.
+function tintaSobre(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+  return .2126 * r + .7152 * g + .0722 * b > .179 ? '#0b0b0f' : '#ffffff';
+}
+const txtPct = p => p > 0 && p < 1 ? '<1%' : p > 99 && p < 100 ? '>99%' : Math.round(p) + '%';
+// Writes each income's % inside its segment (turned sideways on thin bars; skipped where it doesn't fit).
+const pctEnBarras = { id: 'pctEnBarras', afterDatasetsDraw(ch) {
+  const c = ch.ctx, f = 11;
+  c.save(); c.font = `600 ${f}px ${Chart.defaults.font.family || 'sans-serif'}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  ch.data.datasets.forEach((d, di) => {
+    if (!d.pct || !ch.isDatasetVisible(di)) return; c.fillStyle = tintaSobre(d.backgroundColor);
+    ch.getDatasetMeta(di).data.forEach((b, i) => {
+      if (!(d.data[i] > 0)) return;
+      const t = txtPct(d.pct[i]), w = c.measureText(t).width, alto = Math.abs(b.base - b.y), y = (b.base + b.y) / 2;
+      if (b.width >= w + 4 && alto >= f + 5) c.fillText(t, b.x, y);
+      else if (b.width >= f + 1 && alto >= w + 6) { c.save(); c.translate(b.x, y); c.rotate(-Math.PI / 2); c.fillText(t, 0, 0); c.restore(); }
+    });
+  });
+  c.restore();
+} };
 function dibujarPresu() {
   charts.forEach(c => c.destroy()); charts = [];
   if (typeof Chart === 'undefined' || !document.getElementById('chPresu')) return;
@@ -2448,17 +2484,22 @@ function dibujarPresu() {
   const text = cssVar('--text'), muted = cssVar('--muted'), grid = cssVar('--grid'), surface = cssVar('--surface');
   Chart.defaults.color = muted; Chart.defaults.animation.duration = 300;
   const money = v => '$ ' + fmt0.format(Math.round(v));
+  const ing = serieIngresos(ks), varios = ing.length > 1;
   charts.push(new Chart(document.getElementById('chPresu'), {
     type: 'bar',
     data: { labels: ks.map(mesCorto), datasets: [
-      { label: 'Ingresos', data: tots.map(t => t.ingreso), backgroundColor: cssVar('--s1'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 26 },
-      { label: 'Egresos', data: tots.map(t => t.gasto + t.ahorro), backgroundColor: cssVar('--s2'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 26 }] },
+      ...(varios ? ing.map(x => ({ label: x.nombre, data: x.data, pct: x.pct, pctTotal: x.pctTotal, stack: 'ing', backgroundColor: cssVar(x.color), borderColor: surface, borderWidth: { top: 2 }, borderRadius: 2, borderSkipped: false, maxBarThickness: 40 }))
+        : [{ label: ing.length ? ing[0].nombre : 'Ingresos', data: tots.map(t => t.ingreso), stack: 'ing', backgroundColor: cssVar(ing.length ? ing[0].color : '--s1'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 40 }]),
+      { label: 'Egresos', data: tots.map(t => t.gasto + t.ahorro), stack: 'egr', backgroundColor: cssVar('--s2'), borderRadius: 4, borderSkipped: 'start', maxBarThickness: 40 }] },
+    plugins: varios ? [pctEnBarras] : [],
     options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text } },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2, color: text,
+        generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).map(l => { const d = ch.data.datasets[l.datasetIndex]; l.lineWidth = 0; if (d.pct) l.text += ' · ' + txtPct(d.pctTotal); return l; }) } },
         tooltip: { ...globoChart(),
-          callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}`, footer: i => 'Me queda: ' + money(tots[i[0].dataIndex].queda) } } },
-      scales: { x: { grid: { display: false }, border: { color: grid } },
-        y: { grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k' } } } }
+          filter: i => !i.dataset.pct || i.parsed.y !== 0,
+          callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}${c.dataset.pct ? ' (' + txtPct(c.dataset.pct[c.dataIndex]) + ')' : ''}`, footer: i => !i.length ? '' : (varios ? ['Total ingresos: ' + money(tots[i[0].dataIndex].ingreso)] : []).concat('Me queda: ' + money(tots[i[0].dataIndex].queda)) } } },
+      scales: { x: { stacked: true, grid: { display: false }, border: { color: grid } },
+        y: { stacked: true, grid: { color: grid }, border: { display: false }, beginAtZero: true, ticks: { callback: v => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'M' : '$' + fmt0.format(Math.round(v / 1000)) + 'k' } } } }
   }));
   const a = serieAhorro();
   if (!a || !document.getElementById('chAhoAcum')) return;
