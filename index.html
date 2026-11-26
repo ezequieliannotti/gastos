@@ -289,6 +289,10 @@ th.c, td.c { text-align: center; width: 1%; white-space: nowrap; }
 td.c input, .vpend input { width: 18px; height: 18px; accent-color: var(--warn); cursor: pointer; }
 .vpend { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); cursor: pointer; min-height: 32px; }
 .vpend:has(input:checked) { color: var(--warn); font-weight: 600; }
+.vcatsuma { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -4px 0 10px; font-size: 14px; }
+.vcatsuma { min-height: 32px; }
+.vcatsuma b { font-size: 17px; color: var(--s3); }
+.vcatsuma .vcatnom { font-weight: 600; }
 .mov.tot { border-bottom: 0; font-weight: 650; }
 .mtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
 .mdesc { font-weight: 500; word-break: break-word; }
@@ -2783,6 +2787,45 @@ function borrarGastoViaje(gid) {
   save(); render();
 }
 
+// Categories picked in the "Por categoría" chart, per trip, to add them up
+function catsElegidas(v) {
+  const hay = new Set(v.gastos.map(g => g.cat));
+  return ((ui.vcat || {})[v.id] || []).filter(c => hay.has(c));
+}
+function sumaCatsViaje(v, cats) {
+  const gs = v.gastos.filter(g => cats.includes(g.cat));
+  return { total: gs.reduce((a, g) => a + montoViaje(g), 0), n: gs.length };
+}
+function htmlSumaCat(v) {
+  const cats = catsElegidas(v);
+  if (!cats.length) return '<span class="muted">Tocá una o más categorías para ver cuánto suman juntas.</span>';
+  const s = sumaCatsViaje(v, cats), tot = totalViaje(v).total;
+  return `<span class="vcatnom">${cats.map(esc).join(' + ')}</span>
+    <b>${$(s.total)}</b><span class="muted">${tot ? Math.round(s.total / tot * 100) + '% del viaje · ' : ''}${s.n} gasto${s.n === 1 ? '' : 's'}</span>
+    <button class="small ghost" onclick="limpiarCatViaje()">${ic('x')}Limpiar</button>`;
+}
+function toggleCatViaje(cat) {
+  const v = viajeActual(), cats = catsElegidas(v);
+  ui.vcat = ui.vcat || {};
+  ui.vcat[v.id] = cats.includes(cat) ? cats.filter(c => c !== cat) : [...cats, cat];
+  pintarCatViaje();
+}
+function limpiarCatViaje() { const v = viajeActual(); if (ui.vcat) delete ui.vcat[v.id]; pintarCatViaje(); }
+function pintarCatViaje() {
+  const v = viajeActual(), box = document.getElementById('vcatSuma');
+  if (box) box.innerHTML = htmlSumaCat(v);
+  const ch = charts.find(c => c.canvas && c.canvas.id === 'chVCat');
+  if (ch) { ch.data.datasets[0].backgroundColor = coloresCatViaje(v, ch.data.labels); ch.update('none'); }
+}
+function filaCat(e, ch, cats) {
+  const a = ch.chartArea; if (e.y < a.top || e.y > a.bottom) return null;
+  return cats[Math.round(ch.scales.y.getValueForPixel(e.y))] || null;
+}
+function coloresCatViaje(v, labels) {
+  const cats = catsElegidas(v), on = cssVar('--s3');
+  return labels.map(c => !cats.length || cats.includes(c) ? on : on + '40');
+}
+
 function renderViajes() {
   asegurarViajes();
   if (!state.viajes.length) return `<div class="card empty">${ic('plane', 'grande')}<h2>Todavía no cargaste ningún viaje</h2>
@@ -2832,7 +2875,7 @@ function renderViajes() {
       ${t.nFalta ? `<tr class="tot"><td></td><td colspan="4">Me falta pagar</td><td class="n warn">${$(t.falta)}</td><td></td></tr>` : ''}</tbody></table></div>`;
   h += '</div>';
   if (gs.length) h += `<div class="charts">
-      <div class="card"><h2>Por categoría</h2><div class="chartbox"><canvas id="chVCat"></canvas></div></div>
+      <div class="card"><h2>Por categoría</h2><div id="vcatSuma" class="vcatsuma" aria-live="polite">${htmlSumaCat(v)}</div><div class="chartbox"><canvas id="chVCat"></canvas></div></div>
       <div class="card"><h2>Por día</h2><div class="chartbox"><canvas id="chVDia"></canvas></div></div></div>`;
 
   // Every trip, oldest to newest, to compare across the years
@@ -2866,10 +2909,16 @@ function dibujarViajes() {
     const porCat = {}; v.gastos.forEach(g => porCat[g.cat] = (porCat[g.cat] || 0) + montoViaje(g));
     const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]), tot = cats.reduce((a, c) => a + porCat[c], 0);
     charts.push(new Chart(document.getElementById('chVCat'), {
-      type: 'bar', data: { labels: cats, datasets: [{ label: '', data: cats.map(c => porCat[c]), backgroundColor: cssVar('--s3'), ...barra, maxBarThickness: 26 }] },
-      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ` ${money(c.parsed.x)} · ${(c.parsed.x / tot * 100).toFixed(0)}%` } } },
+      type: 'bar', data: { labels: cats, datasets: [{ label: '', data: cats.map(c => porCat[c]), backgroundColor: coloresCatViaje(v, cats), ...barra, maxBarThickness: 26 }] },
+      options: { indexAxis: 'y', maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ` ${money(c.parsed.x)} · ${(c.parsed.x / tot * 100).toFixed(0)}%` } } },
         scales: { x: ejeY(corto), y: { grid: { display: false }, border: { color: grid }, ticks: { color: text } } } }
     }));
+    // The whole row is clickable, the category name too, so short bars are easy to hit.
+    // Chart.js only reports clicks inside the plot area, so listen on the canvas itself.
+    const chCat = charts[charts.length - 1], cv = chCat.canvas;
+    cv.addEventListener('click', ev => { const c = filaCat({ y: ev.offsetY }, chCat, cats); if (c) toggleCatViaje(c); });
+    cv.addEventListener('mousemove', ev => { cv.style.cursor = filaCat({ y: ev.offsetY }, chCat, cats) ? 'pointer' : ''; });
     const dias = [...new Set(v.gastos.map(g => g.fecha))].sort();
     charts.push(new Chart(document.getElementById('chVDia'), {
       type: 'bar', data: { labels: dias.map(d => fechaCorta(d).slice(0, 5)), datasets: [{ label: '', data: dias.map(d => v.gastos.filter(g => g.fecha === d).reduce((a, g) => a + montoViaje(g), 0)), backgroundColor: cssVar('--s1'), ...barra }] },
