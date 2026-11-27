@@ -2816,6 +2816,23 @@ function pintarCatViaje() {
   if (box) box.innerHTML = htmlSumaCat(v);
   const ch = charts.find(c => c.canvas && c.canvas.id === 'chVCat');
   if (ch) { ch.data.datasets[0].backgroundColor = coloresCatViaje(v, ch.data.labels); ch.update('none'); }
+  const cd = charts.find(c => c.canvas && c.canvas.id === 'chVDia');
+  if (cd) { const dd = diasViajeDatos(v); cd.data.datasets = datasetsDiaViaje(v, dd); cd.update(); }
+  const t = document.getElementById('vdiaSub');
+  if (t) t.textContent = catsElegidas(v).length ? 'solo ' + catsElegidas(v).join(' + ') + ' · en claro, el resto del día' : '';
+}
+// Per-day totals; with categories picked, also the part of each day in those categories
+function diasViajeDatos(v) {
+  const dias = [...new Set(v.gastos.map(g => g.fecha))].sort(), cats = catsElegidas(v);
+  const suma = (d, f) => v.gastos.filter(g => g.fecha === d && f(g)).reduce((a, g) => a + montoViaje(g), 0);
+  return { dias, cats, total: dias.map(d => suma(d, () => true)), sel: cats.length ? dias.map(d => suma(d, g => cats.includes(g.cat))) : null };
+}
+function datasetsDiaViaje(v, dd, barra) {
+  const azul = cssVar('--s1'), b = { borderRadius: 4, borderSkipped: 'start', maxBarThickness: 48, ...(barra || {}), grouped: false };
+  if (!dd.sel) return [{ label: '', data: dd.total, backgroundColor: azul, ...b }];
+  // picked categories in full color, the rest of the day faded behind
+  return [{ label: dd.cats.join(' + '), data: dd.sel, backgroundColor: cssVar('--s3'), ...b, order: 1 },
+    { label: 'Todo el día', data: dd.total, backgroundColor: azul + '40', ...b, order: 2 }];
 }
 function filaCat(e, ch, cats) {
   const a = ch.chartArea; if (e.y < a.top || e.y > a.bottom) return null;
@@ -2876,7 +2893,7 @@ function renderViajes() {
   h += '</div>';
   if (gs.length) h += `<div class="charts">
       <div class="card"><h2>Por categoría</h2><div id="vcatSuma" class="vcatsuma" aria-live="polite">${htmlSumaCat(v)}</div><div class="chartbox"><canvas id="chVCat"></canvas></div></div>
-      <div class="card"><h2>Por día</h2><div class="chartbox"><canvas id="chVDia"></canvas></div></div></div>`;
+      <div class="card"><h2>Por día <span class="sub" id="vdiaSub">${catsElegidas(v).length ? 'solo ' + esc(catsElegidas(v).join(' + ')) + ' · en claro, el resto del día' : ''}</span></h2><div class="chartbox"><canvas id="chVDia"></canvas></div></div></div>`;
 
   // Every trip, oldest to newest, to compare across the years
   const todos = state.viajes.slice().sort((a, b) => (a.desde || '').localeCompare(b.desde || ''));
@@ -2919,10 +2936,10 @@ function dibujarViajes() {
     const chCat = charts[charts.length - 1], cv = chCat.canvas;
     cv.addEventListener('click', ev => { const c = filaCat({ y: ev.offsetY }, chCat, cats); if (c) toggleCatViaje(c); });
     cv.addEventListener('mousemove', ev => { cv.style.cursor = filaCat({ y: ev.offsetY }, chCat, cats) ? 'pointer' : ''; });
-    const dias = [...new Set(v.gastos.map(g => g.fecha))].sort();
+    const dd = diasViajeDatos(v);
     charts.push(new Chart(document.getElementById('chVDia'), {
-      type: 'bar', data: { labels: dias.map(d => fechaCorta(d).slice(0, 5)), datasets: [{ label: '', data: dias.map(d => v.gastos.filter(g => g.fecha === d).reduce((a, g) => a + montoViaje(g), 0)), backgroundColor: cssVar('--s1'), ...barra }] },
-      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ' ' + money(c.parsed.y) } } }, scales: { x: ejeX, y: ejeY(corto) } }
+      type: 'bar', data: { labels: dd.dias.map(d => fechaCorta(d).slice(0, 5)), datasets: datasetsDiaViaje(v, dd, barra) },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ` ${c.dataset.label ? c.dataset.label + ': ' : ''}${money(c.parsed.y)}` } } }, scales: { x: ejeX, y: ejeY(corto) } }
     }));
   }
   const enUsd = ui.viajeComp === 'usd';
