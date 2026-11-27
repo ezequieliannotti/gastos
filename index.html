@@ -2833,7 +2833,11 @@ function toggleCatViaje(cat) {
 function limpiarCatViaje() { const v = viajeActual(); if (ui.vcat) delete ui.vcat[v.id]; pintarCatViaje(); }
 function pintarCatViaje() {
   const v = viajeActual(), box = document.getElementById('vcatSuma');
+  // the list above gets shorter or longer: keep the chart where it was on screen
+  const ancla = document.getElementById('chVCat'), antes = ancla ? ancla.getBoundingClientRect().top : 0;
+  filtrarGastosViaje(v);
   if (box) box.innerHTML = htmlSumaCat(v);
+  if (ancla) window.scrollBy(0, ancla.getBoundingClientRect().top - antes);
   const ch = charts.find(c => c.canvas && c.canvas.id === 'chVCat');
   if (ch) { ch.data.datasets[0].backgroundColor = coloresCatViaje(v, ch.data.labels); ch.update('none'); }
   const cd = charts.find(c => c.canvas && c.canvas.id === 'chVDia');
@@ -2853,6 +2857,21 @@ function datasetsDiaViaje(v, dd, barra) {
   // picked categories in full color, the rest of the day faded behind
   return [{ label: dd.cats.join(' + '), data: dd.sel, backgroundColor: cssVar('--s3'), ...b, order: 1 },
     { label: 'Todo el día', data: dd.total, backgroundColor: azul + '40', ...b, order: 2 }];
+}
+function subGastosViaje(v) {
+  if (!v.gastos.length) return '';
+  const cats = catsElegidas(v);
+  if (!cats.length) return 'Tocá un gasto para editarlo o borrarlo';
+  const n = v.gastos.filter(g => cats.includes(g.cat)).length;
+  return `Solo ${esc(cats.join(' + '))} · ${n} de ${v.gastos.length} <button class="small ghost" onclick="limpiarCatViaje()">Ver todos</button>`;
+}
+function filtrarGastosViaje(v) {
+  const card = document.getElementById('vgastosCard'); if (!card) return;
+  const cats = catsElegidas(v);
+  card.querySelectorAll('[data-cat]').forEach(el => { el.hidden = !!cats.length && !cats.includes(el.dataset.cat); });
+  document.getElementById('vgastosSub').innerHTML = subGastosViaje(v);
+  const ft = document.getElementById('vgFiltTot');
+  if (ft) { ft.hidden = !cats.length; ft.querySelector('.n, .mamt').textContent = cats.length ? $(sumaCatsViaje(v, cats).total) : ''; }
 }
 function filaCat(e, ch, cats) {
   const a = ch.chartArea; if (e.y < a.top || e.y > a.bottom) return null;
@@ -2897,18 +2916,21 @@ function renderViajes() {
   // newest day first; within a day, the one added last goes on top
   const gs = v.gastos.map((g, i) => [g, i]).sort((a, b) => b[0].fecha.localeCompare(a[0].fecha) || b[1] - a[1]).map(x => x[0]);
   const original = g => [g.usd ? `U$S ${fmt.format(g.usd)} a ${$0(g.cotiz)}` : '', entreViaje(g) > 1 ? `${$0(montoEnteroViaje(g))} ÷ ${entreViaje(g)}` : ''].filter(Boolean).join(' · ');
-  h += `<div class="card"><h2>Gastos del viaje <span class="sub">${gs.length ? 'Tocá un gasto para editarlo o borrarlo' : ''}</span></h2>`;
+  const fuera = g => catsElegidas(v).length && !catsElegidas(v).includes(g.cat) ? 'hidden' : '';
+  h += `<div class="card" id="vgastosCard"><h2>Gastos del viaje <span class="sub" id="vgastosSub">${subGastosViaje(v)}</span></h2>`;
   if (!gs.length) h += '<p class="muted" style="margin:0">Todavía no anotaste gastos en este viaje.</p>';
-  else if (celu) h += gs.map(g => `<div class="mov" role="button" tabindex="0" onclick="abrirGastoViaje('${g.id}')" onkeydown="if(event.key==='Enter')abrirGastoViaje('${g.id}')">
+  else if (celu) h += gs.map(g => `<div class="mov" data-cat="${esc(g.cat)}" ${fuera(g)} role="button" tabindex="0" onclick="abrirGastoViaje('${g.id}')" onkeydown="if(event.key==='Enter')abrirGastoViaje('${g.id}')">
       <div class="mtop"><span class="mdesc">${esc(g.desc)}</span><b class="mamt">${$(montoViaje(g))}</b></div>
       <div class="mmeta">${fechaCorta(g.fecha)} · ${esc(g.cat)}${original(g) ? ' · ' + original(g) : ''}</div>
       <label class="vpend" onclick="event.stopPropagation()"><input type="checkbox" ${g.pendiente ? 'checked' : ''} onchange="pendienteViaje('${g.id}',this.checked)">Falta pagar</label></div>`).join('')
-      + `<div class="mov tot"><div class="mtop"><span class="mdesc">Total</span><b class="mamt">${$(t.total)}</b></div>${t.nFalta ? `<div class="mmeta">Me falta pagar <b class="warn">${$(t.falta)}</b></div>` : ''}</div>`;
+      + `<div class="mov tot" id="vgFiltTot" hidden><div class="mtop"><span class="mdesc">Total de lo elegido</span><b class="mamt"></b></div></div>`
+      + `<div class="mov tot"><div class="mtop"><span class="mdesc">Total del viaje</span><b class="mamt">${$(t.total)}</b></div>${t.nFalta ? `<div class="mmeta">Me falta pagar <b class="warn">${$(t.falta)}</b></div>` : ''}</div>`;
   else h += `<div class="tablewrap"><table><thead><tr><th class="pc"></th><th>Fecha</th><th>Qué fue</th><th>Categoría</th><th class="n">Detalle</th><th class="n">Mi parte $</th><th class="c">Falta pagar</th></tr></thead><tbody>
-      ${gs.map(g => `<tr><td class="pc"><button class="small ghost pencil" aria-label="Editar ${esc(g.desc)}" onclick="abrirGastoViaje('${g.id}')">${ic('pencil')}</button></td>
+      ${gs.map(g => `<tr data-cat="${esc(g.cat)}" ${fuera(g)}><td class="pc"><button class="small ghost pencil" aria-label="Editar ${esc(g.desc)}" onclick="abrirGastoViaje('${g.id}')">${ic('pencil')}</button></td>
         <td>${fechaCorta(g.fecha)}</td><td class="desc">${esc(g.desc)}</td><td>${esc(g.cat)}</td><td class="n muted">${original(g)}</td><td class="n"><b>${$(montoViaje(g))}</b></td>
         <td class="c"><input type="checkbox" ${g.pendiente ? 'checked' : ''} aria-label="Falta pagar ${esc(g.desc)}" onchange="pendienteViaje('${g.id}',this.checked)"></td></tr>`).join('')}
-      <tr class="tot"><td></td><td colspan="4">Total</td><td class="n">${$(t.total)}</td><td></td></tr>
+      <tr class="tot" id="vgFiltTot" hidden><td></td><td colspan="4">Total de lo elegido</td><td class="n"></td><td></td></tr>
+      <tr class="tot"><td></td><td colspan="4">Total del viaje</td><td class="n">${$(t.total)}</td><td></td></tr>
       ${t.nFalta ? `<tr class="tot"><td></td><td colspan="4">Me falta pagar</td><td class="n warn">${$(t.falta)}</td><td></td></tr>` : ''}</tbody></table></div>`;
   h += '</div>';
   if (gs.length) h += `<div class="charts">
@@ -2933,6 +2955,7 @@ function renderViajes() {
 }
 function dibujarViajes() {
   charts.forEach(c => c.destroy()); charts = [];
+  if (state.viajes && state.viajes.length) filtrarGastosViaje(viajeActual());
   if (typeof Chart === 'undefined' || !document.getElementById('chViajes')) return;
   const text = cssVar('--text'), grid = cssVar('--grid');
   Chart.defaults.color = cssVar('--muted'); Chart.defaults.animation.duration = 300;
