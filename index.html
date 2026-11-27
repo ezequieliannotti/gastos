@@ -292,6 +292,7 @@ td.c input, .vpend input { width: 18px; height: 18px; accent-color: var(--warn);
 .vcatsuma { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -4px 0 10px; font-size: 14px; }
 .vcatsuma { min-height: 32px; }
 .vcatsuma b { font-size: 17px; color: var(--s3); }
+.vcatsuma b.vcatusd { color: var(--text); font-weight: 600; }
 .vcatsuma .vcatnom { font-weight: 600; }
 .mov.tot { border-bottom: 0; font-weight: 650; }
 .mtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
@@ -2820,7 +2821,7 @@ function htmlSumaCat(v) {
   if (!cats.length) return '<span class="muted">Tocá una o más categorías para ver cuánto suman juntas.</span>';
   const s = sumaCatsViaje(v, cats), tot = totalViaje(v).total;
   return `<span class="vcatnom">${cats.map(esc).join(' + ')}</span>
-    <b>${$(s.total)}</b><span class="muted">${tot ? Math.round(s.total / tot * 100) + '% del viaje · ' : ''}${s.n} gasto${s.n === 1 ? '' : 's'}</span>
+    <b>${$(s.total)}</b>${v.dolar ? `<b class="vcatusd" title="Al dólar de referencia del viaje: ${$0(v.dolar)}">≈ U$S ${fmt.format(s.total / v.dolar)}</b>` : ''}<span class="muted">${tot ? Math.round(s.total / tot * 100) + '% del viaje · ' : ''}${s.n} gasto${s.n === 1 ? '' : 's'}</span>
     <button class="small ghost" onclick="limpiarCatViaje()">${ic('x')}Limpiar</button>`;
 }
 function toggleCatViaje(cat) {
@@ -2947,7 +2948,7 @@ function dibujarViajes() {
     charts.push(new Chart(document.getElementById('chVCat'), {
       type: 'bar', data: { labels: cats, datasets: [{ label: '', data: cats.map(c => porCat[c]), backgroundColor: coloresCatViaje(v, cats), ...barra, maxBarThickness: 26 }] },
       options: { indexAxis: 'y', maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ` ${money(c.parsed.x)} · ${(c.parsed.x / tot * 100).toFixed(0)}%` } } },
+        plugins: { legend: { display: false }, tooltip: { ...globoChart(), callbacks: { label: c => ` ${money(c.parsed.x)}${v.dolar ? ` · ≈ U$S ${fmt0.format(Math.round(c.parsed.x / v.dolar))}` : ''} · ${(c.parsed.x / tot * 100).toFixed(0)}%` } } },
         scales: { x: ejeY(corto), y: { grid: { display: false }, border: { color: grid }, ticks: { color: text } } } }
     }));
     // The whole row is clickable, the category name too, so short bars are easy to hit.
