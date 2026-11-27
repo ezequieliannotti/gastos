@@ -2654,7 +2654,26 @@ function viajeActual() {
   ui.viaje = v && v.id;
   return v;
 }
-const optsCatViaje = sel => CATS_VIAJE.map(c => `<option ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
+// Trip categories: the fixed ones plus the ones the user adds (kept in state.catsViaje, shared by every trip)
+function catsViaje(extra) {
+  const l = [...CATS_VIAJE, ...(state.catsViaje || [])];
+  if (extra && !l.includes(extra)) l.push(extra);
+  return l;
+}
+const optsCatViaje = sel => catsViaje(sel).map(c => `<option value="${esc(c)}" ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('')
+  + '<option value="__nueva">+ Nueva categoría…</option>';
+// Picking "+ Nueva categoría…" asks for the name, saves it and leaves it selected
+function catViajeElegida(sel) {
+  if (sel.value !== '__nueva') { sel.dataset.prev = sel.value; return; }
+  const n = (prompt('Nombre de la nueva categoría (ej: Nafta, Regalos, Peajes):') || '').trim().replace(/\s+/g, ' ');
+  const prev = sel.dataset.prev || 'Comida';
+  if (!n) { sel.value = prev; return; }
+  const ya = catsViaje().find(c => c.toLowerCase() === n.toLowerCase());
+  if (!ya) { state.catsViaje = [...(state.catsViaje || []), n]; save(); }
+  const nom = ya || n;
+  sel.innerHTML = optsCatViaje(nom); sel.value = nom; sel.dataset.prev = nom;
+  if (!ya) toast(`✓ Categoría "${nom}" agregada`);
+}
 // Today if it falls inside the trip, otherwise its first day.
 function fechaSugerida(v) {
   const h = hoyISO();
@@ -2752,7 +2771,7 @@ function abrirGastoViaje(gid) {
     <div class="vform" style="margin-top:14px">
       <label>Fecha<input type="date" id="vgFecha" value="${g.fecha}"></label>
       <label>Qué fue<input type="text" id="vgDesc" value="${esc(g.desc)}"></label>
-      <label>Categoría<select id="vgCat">${optsCatViaje(g.cat)}</select></label>
+      <label>Categoría<select id="vgCat" data-prev="${esc(g.cat)}" onchange="catViajeElegida(this)">${optsCatViaje(g.cat)}</select></label>
       <label>Moneda<select id="vgMon" onchange="document.getElementById('vgCotizBox').hidden=this.value!=='usd'"><option value="ars" ${usd ? '' : 'selected'}>Pesos</option><option value="usd" ${usd ? 'selected' : ''}>Dólares</option></select></label>
       <label>Monto<input type="text" inputmode="decimal" id="vgMonto" value="${fmtCelda(usd ? g.usd : g.pesos)}"></label>
       <label id="vgCotizBox" ${usd ? '' : 'hidden'}>Lo pagué a $<input type="text" inputmode="decimal" id="vgCotiz" value="${g.cotiz ? fmtCelda(g.cotiz) : cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}"></label>
@@ -2864,7 +2883,7 @@ function renderViajes() {
       <form id="vform" class="toolbar" data-enter onsubmit="agregarGastoViaje();return false" oninput="mostrarParteViaje()" onchange="mostrarParteViaje()" style="margin:0">
         <input type="date" name="fecha" aria-label="Fecha" value="${vf.fecha && (!v.desde || vf.fecha >= v.desde) ? vf.fecha : fechaSugerida(v)}">
         <input type="text" name="desc" aria-label="Qué fue" placeholder="Qué fue (cena, taxi, hotel…)" enterkeyhint="next" style="flex:1;min-width:180px">
-        <select name="cat" aria-label="Categoría">${optsCatViaje(vf.cat || 'Comida')}</select>
+        <select name="cat" aria-label="Categoría" data-prev="${esc(vf.cat || 'Comida')}" onchange="catViajeElegida(this)">${optsCatViaje(vf.cat || 'Comida')}</select>
         <select name="mon" aria-label="Moneda" onchange="document.getElementById('vCotiz').hidden=this.value!=='usd'"><option value="ars" ${mon === 'ars' ? 'selected' : ''}>$ Pesos</option><option value="usd" ${mon === 'usd' ? 'selected' : ''}>U$S Dólares</option></select>
         <input type="text" name="monto" aria-label="Monto" placeholder="Monto" inputmode="decimal" enterkeyhint="done" style="width:120px">
         <label id="vCotiz" ${mon === 'usd' ? '' : 'hidden'} style="display:inline-flex;align-items:center;gap:6px">a $<input type="text" name="cotiz" aria-label="Cotización del dólar" inputmode="decimal" value="${cotizSugerida(v) ? fmtCelda(cotizSugerida(v)) : ''}" style="width:90px"></label>
@@ -2980,6 +2999,10 @@ function abrirConfig() {
       <input type="text" value="${esc(c)}" onchange="renombrarCat(${i},this.value)" style="flex:1">
       <button class="small danger" onclick="borrarCat(${i})">Eliminar</button></div>`).join('')}
     <button class="small" onclick="nuevaCat()">+ Agregar categoría</button>
+    ${(state.catsViaje || []).length ? `<h4>Categorías de viajes que agregaste</h4>
+    <div class="muted" style="margin-bottom:8px;font-size:12.5px">Las fijas (${CATS_VIAJE.join(', ')}) no se pueden borrar. Si borrás una tuya, los gastos que ya la tienen la conservan.</div>
+    ${state.catsViaje.map((c, i) => `<div class="toolbar" style="margin-bottom:6px"><span style="flex:1">${esc(c)}</span>
+      <button class="small danger" onclick="borrarCatViaje(${i})">Eliminar</button></div>`).join('')}` : ''}
     <h4>Copia de seguridad</h4>
     <div class="muted" style="margin-bottom:8px;font-size:12.5px">Todo queda guardado en este navegador. Bajate una copia de vez en cuando por si borrás los datos del navegador o cambiás de compu.</div>
     <div class="toolbar">
@@ -2992,6 +3015,11 @@ function abrirConfig() {
     <div style="text-align:right;margin-top:18px"><button class="primary" onclick="cerrarConfig()">Listo</button></div>
   </div>`;
   document.body.appendChild(bg);
+}
+function borrarCatViaje(i) {
+  const c = state.catsViaje[i];
+  if (!confirm(`¿Sacar "${c}" de la lista de categorías de viajes? Los gastos que ya la tienen no cambian.`)) return;
+  state.catsViaje.splice(i, 1); save(); refrescarConfig();
 }
 function cerrarConfig() { document.getElementById('cfg')?.remove(); render(); }
 function refrescarConfig() { cerrarConfig(); abrirConfig(); }
